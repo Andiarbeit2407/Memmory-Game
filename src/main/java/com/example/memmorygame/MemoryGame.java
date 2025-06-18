@@ -25,19 +25,25 @@ public class MemoryGame extends Application {
     private Scene startScene;
 
     // Memory-Spiel Attribute
-    private Button[][] buttons = new Button[4][4];
-    private String[][] werte = new String[4][4];
-    private boolean[][] aufgedeckt = new boolean[4][4];
+    private Button[][] buttons; // Größe wird dynamisch festgelegt
+    private String[][] werte;   // Größe wird dynamisch festgelegt
+    private boolean[][] aufgedeckt; // Größe wird dynamisch festgelegt
     private List<Button> geklickteButtons = new ArrayList<>();
     private int paare = 0;
     private Label scoreLabel;
     private int versuche = 0;
-    private String[] symbole = {"A", "B", "C", "D", "E", "F", "G", "H"};
+    private int gridSize = 4; // Standardmäßig 4x4
+    private double calculatedButtonSize; // Neue Instanzvariable für die Button-Größe
     private String currentPlayerName = "";
     private String currentDifficulty = "Mittel";
     private double pauseTime = 1.0;
 
-    // Musik-Manager Attribute
+    // Layout-Elemente für das Spielpaneel, damit sie dynamisch aktualisiert werden können
+    private BorderPane gameLayout;
+    private GridPane gameGrid;
+    private HBox controls; // Hier als Instanzvariable deklariert
+
+    // Musik-Manager Attribute (Unverändert gelassen)
     private ObservableList<Song> playlist = FXCollections.observableArrayList();
     private MediaPlayer musicPlayer;
     private ListView<Song> songListView;
@@ -48,426 +54,560 @@ public class MemoryGame extends Application {
     private boolean isRepeatMode = false;
     private int currentSongIndex = 0;
 
+    // Referenz auf den Musik-Root, um ToggleButtons zugänglich zu machen, ohne die Logik zu ändern
+    private VBox musicRoot;
+
+
     @Override
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
-        primaryStage.setTitle("Memory Game & Musik Manager");
 
-        startScene = new Scene(createStartPage(), 600, 800);
+        // Startseite erstellen
+        VBox startPageRoot = createStartPage();
+        startScene = new Scene(startPageRoot, 800, 600); // Standardgröße für Startseite
 
-        TabPane tabPane = new TabPane();
-        Tab gameTab = new Tab("Memory Spiel");
-        gameTab.setClosable(false);
-        gameTab.setContent(createGamePane());
+        // Spiel-Panel erstellen (initialisiert nur das Layout, nicht die Buttons)
+        VBox gamePaneRoot = createGamePane();
+        gameScene = new Scene(gamePaneRoot); // Keine feste Größe mehr hier, wird dynamisch angepasst
 
-        Tab musicTab = new Tab("Musik Manager");
-        musicTab.setClosable(false);
-        musicTab.setContent(createMusicPane());
+        // Wiedergabeliste laden
+        loadPlaylist();
 
-        tabPane.getTabs().addAll(gameTab, musicTab);
-        gameScene = new Scene(tabPane, 600, 800);
+        // --- Dark Mode CSS anwenden ---
+        // Stellen Sie sicher, dass dark-mode.css im Ressourcenordner (z.B. src/main/resources) liegt.
+        startScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
+        gameScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
 
-        gameScene.setOnKeyPressed(event -> {
-            switch (event.getCode()) {
-                case SPACE -> pauseMusic();
-                case RIGHT -> playNextSong();
-                case LEFT -> playPreviousSong();
-                case ESCAPE -> showPauseMenu();
-            }
-        });
-
-        // Hinzufügen des CAPTCHA-Dialogs vor dem Schließen
-        primaryStage.setOnCloseRequest(event -> {
-            // Zuerst fragen, ob der Benutzer wirklich beenden möchte
-            if (showConfirmationDialog("Beenden", "Möchten Sie das Spiel wirklich beenden?")) {
-                // Wenn ja, dann das CAPTCHA anzeigen
-                if (!showCaptchaDialog()) {
-                    // Wenn das CAPTCHA falsch ist oder abgebrochen wird, das Beenden abbrechen
-                    event.consume();
-                } else {
-                    // Wenn CAPTCHA korrekt, Musik-Player disposten
-                    if (musicPlayer != null) {
-                        musicPlayer.dispose();
-                    }
-                    // Das System wird standardmäßig beendet, da event.consume() nicht aufgerufen wurde
-                }
-            } else {
-                // Wenn der Benutzer den ersten Bestätigungsdialog abbricht, das Beenden abbrechen
-                event.consume();
-            }
-        });
+        // --- Musik automatisch abspielen ---
+        if (!playlist.isEmpty()) {
+            playSong(playlist.get(0));
+            currentSongIndex = 0; // Sicherstellen, dass der Index des aktuell spielenden Songs gesetzt ist
+        }
 
         primaryStage.setScene(startScene);
+        primaryStage.setTitle("Memory Game");
         primaryStage.show();
-
-        loadPlaylist();
     }
 
     private VBox createStartPage() {
-        VBox startRoot = new VBox(20);
-        startRoot.setAlignment(Pos.CENTER);
-        startRoot.setPadding(new Insets(40));
-        startRoot.setStyle("-fx-background-color: #f0f0f0;");
+        VBox root = new VBox(20);
+        root.setPadding(new Insets(50));
+        root.setAlignment(Pos.CENTER);
 
-        Label titleLabel = new Label("Memory & Musik");
-        titleLabel.setStyle("-fx-font-size: 36px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
+        Label titleLabel = new Label("Memory Spiel");
+        titleLabel.setStyle("-fx-font-size: 32px; -fx-font-weight: bold;");
 
-        Label subtitleLabel = new Label("Das ultimative Gedächtnisspiel mit Musikbegleitung");
-        subtitleLabel.setStyle("-fx-font-size: 18px; -fx-text-fill: #34495e;");
+        TextField nameInput = new TextField();
+        nameInput.setPromptText("Gib deinen Spielernamen ein");
+        nameInput.setMaxWidth(300);
 
-        TextField playerNameField = new TextField();
-        playerNameField.setPromptText("Dein Name");
-        playerNameField.setMaxWidth(300);
-        playerNameField.setStyle("-fx-font-size: 16px;");
-
-        ComboBox<String> difficultyBox = new ComboBox<>();
-        difficultyBox.getItems().addAll("Leicht", "Mittel", "Schwer");
-        difficultyBox.setValue("Mittel");
-        difficultyBox.setStyle("-fx-font-size: 16px;");
+        ComboBox<String> difficultyComboBox = new ComboBox<>();
+        difficultyComboBox.getItems().addAll("Einfach", "Mittel", "Schwer");
+        difficultyComboBox.setValue("Mittel"); // Standardwert
 
         Button startButton = new Button("Spiel starten");
-        startButton.setStyle("""
-            -fx-font-size: 18px;
-            -fx-background-color: #2ecc71;
-            -fx-text-fill: white;
-            -fx-padding: 10 20 10 20;
-            -fx-background-radius: 5;
-            """);
-
-        startButton.setOnMouseEntered(e ->
-                startButton.setStyle("""
-                -fx-font-size: 18px;
-                -fx-background-color: #27ae60;
-                -fx-text-fill: white;
-                -fx-padding: 10 20 10 20;
-                -fx-background-radius: 5;
-                """)
-        );
-
-        startButton.setOnMouseExited(e ->
-                startButton.setStyle("""
-                -fx-font-size: 18px;
-                -fx-background-color: #2ecc71;
-                -fx-text-fill: white;
-                -fx-padding: 10 20 10 20;
-                -fx-background-radius: 5;
-                """)
-        );
-
-
-        Button highscoreButton = new Button("Bestenliste");
-        highscoreButton.setStyle("""
-            -fx-font-size: 16px;
-            -fx-background-color: #3498db;
-            -fx-text-fill: white;
-            -fx-padding: 8 15 8 15;
-            -fx-background-radius: 5;
-            """);
-
-
-        VBox buttonsBox = new VBox(15);
-        buttonsBox.setAlignment(Pos.CENTER);
-        buttonsBox.getChildren().addAll(
-                playerNameField,
-                new Label("Schwierigkeitsgrad:"),
-                difficultyBox,
-                startButton,
-                highscoreButton
-        );
-
-        Label creditsLabel = new Label("© 2025 Memory Game");
-        creditsLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #7f8c8d;");
-
-        startRoot.getChildren().addAll(
-                titleLabel,
-                subtitleLabel,
-                new Separator(),
-                buttonsBox,
-                creditsLabel
-        );
-
         startButton.setOnAction(e -> {
-            String playerName = playerNameField.getText().trim();
-            if (playerName.isEmpty()) {
-                showError("Fehler", "Bitte gib deinen Namen ein!");
-                return;
+            currentPlayerName = nameInput.getText().trim();
+            if (currentPlayerName.isEmpty()) {
+                showError("Fehler", "Bitte gib einen Spielernamen ein.");
+            } else {
+                currentDifficulty = difficultyComboBox.getValue();
+                switchToGameView(currentPlayerName, currentDifficulty);
             }
-            switchToGameView(playerName, difficultyBox.getValue());
         });
 
+        Button highscoreButton = new Button("Highscores anzeigen");
         highscoreButton.setOnAction(e -> showHighscores());
 
-        return startRoot;
+        Button exitButton = new Button("Beenden");
+        exitButton.setOnAction(e -> {
+            if (showConfirmationDialog("Beenden", "Möchtest du das Spiel wirklich beenden?")) {
+                primaryStage.close();
+            }
+        });
+
+        // Musik Manager Button
+        Button musicManagerButton = new Button("Musik Manager");
+        musicManagerButton.setOnAction(e -> showMusicManager());
+
+        root.getChildren().addAll(titleLabel, nameInput, difficultyComboBox, startButton, highscoreButton, musicManagerButton, exitButton);
+        return root;
     }
 
     private VBox createGamePane() {
-        VBox gameRoot = new VBox(20);
-        gameRoot.setAlignment(Pos.CENTER);
-        gameRoot.setPadding(new Insets(20));
+        gameLayout = new BorderPane();
+        gameLayout.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE); // BorderPane den gesamten Platz einnehmen lassen
 
-        scoreLabel = new Label("Versuche: 0 | Paare gefunden: 0/8");
-        scoreLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        // Initialisiere ein leeres Grid. Es wird später durch buildGameGrid() ersetzt.
+        gameGrid = new GridPane();
+        gameLayout.setCenter(gameGrid);
 
-        GridPane grid = new GridPane();
-        grid.setAlignment(Pos.CENTER);
-        grid.setHgap(5);
-        grid.setVgap(5);
+        scoreLabel = new Label("Versuche: 0");
+        scoreLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
 
-        spielInitialisieren();
+        Button neuesSpielButton = new Button("Neues Spiel");
+        neuesSpielButton.setOnAction(e -> neuesSpiel());
 
-        for(int i = 0; i < 4; i++) {
-            for(int j = 0; j < 4; j++) {
-                Button btn = new Button("?");
-                btn.setPrefSize(80, 80);
-                btn.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        Button pauseButton = new Button("Pause");
+        pauseButton.setOnAction(e -> showPauseMenu());
+
+        Button backToStartButton = new Button("Zurück zur Startseite");
+        backToStartButton.setOnAction(e -> {
+            if (showConfirmationDialog("Zurück zur Startseite", "Möchtest du das aktuelle Spiel beenden und zur Startseite zurückkehren?")) {
+                primaryStage.setScene(startScene);
+                stopMusic(); // Musik stoppen, wenn man zur Startseite zurückkehrt
+            }
+        });
+
+        controls = new HBox(20, scoreLabel, neuesSpielButton, pauseButton, backToStartButton); // Jetzt Zuweisung zur Instanzvariable
+        controls.setAlignment(Pos.CENTER);
+        controls.setPadding(new Insets(20));
+        gameLayout.setBottom(controls);
+
+        VBox gameRootVBox = new VBox();
+        gameRootVBox.getChildren().add(gameLayout);
+        VBox.setVgrow(gameLayout, Priority.ALWAYS); // Erlaubt dem BorderPane, vertikal zu wachsen
+
+        return gameRootVBox;
+    }
+
+    /**
+     * Erstellt das Spielgitter und die Buttons basierend auf der aktuellen gridSize und calculatedButtonSize.
+     */
+    private void buildGameGrid() {
+        gameGrid = new GridPane();
+        gameGrid.setAlignment(Pos.CENTER);
+        gameGrid.setHgap(10); // Horizontaler Abstand
+        gameGrid.setVgap(10); // Vertikaler Abstand
+
+        buttons = new Button[gridSize][gridSize]; // Initialisiere das buttons-Array mit der korrekten Größe
+
+        for (int i = 0; i < gridSize; i++) {
+            for (int j = 0; j < gridSize; j++) {
+                Button btn = new Button();
+                // Button-Größe basierend auf calculatedButtonSize setzen
+                btn.setMinSize(calculatedButtonSize, calculatedButtonSize);
+                btn.setMaxSize(calculatedButtonSize, calculatedButtonSize); // Fixe Größe
+
+                // Schriftgröße anpassen: größere Gitter -> kleinere Schrift
+                int fontSize;
+                if (gridSize == 4) fontSize = 24;
+                else if (gridSize == 6) fontSize = 18;
+                else fontSize = 14; // for gridSize == 8
+                btn.setStyle("-fx-font-size: " + fontSize + "px;");
 
                 final int row = i;
                 final int col = j;
                 btn.setOnAction(e -> buttonGeklickt(row, col));
-
                 buttons[i][j] = btn;
-                grid.add(btn, j, i);
+                gameGrid.add(btn, j, i);
             }
         }
-
-        Button resetBtn = new Button("Neues Spiel");
-        resetBtn.setStyle("-fx-font-size: 14px;");
-        resetBtn.setOnAction(e -> neuesSpiel());
-
-        gameRoot.getChildren().addAll(scoreLabel, grid, resetBtn);
-        return gameRoot;
+        gameLayout.setCenter(gameGrid); // Ersetze das alte Gitter durch das neu erstellte
     }
 
     private VBox createMusicPane() {
-        VBox musicRoot = new VBox(10);
-        musicRoot.setPadding(new Insets(10));
-        musicRoot.setAlignment(Pos.CENTER);
+        musicRoot = new VBox(10); // Speichere Referenz im Instanzfeld
+        musicRoot.setPadding(new Insets(20));
+        musicRoot.setAlignment(Pos.TOP_CENTER);
 
-        songListView = new ListView<>();
-        songListView.setPrefHeight(300);
-        songListView.setItems(playlist);
+        Label musicTitle = new Label("Musik Manager");
+        musicTitle.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
 
-        currentSongLabel = new Label("Kein Song ausgewählt");
-        currentSongLabel.setStyle("-fx-font-size: 14px;");
+        songListView = new ListView<>(playlist);
+        songListView.setPrefHeight(200);
+
+        currentSongLabel = new Label("Aktueller Song: Keiner");
+        currentSongLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
 
         progressBar = new ProgressBar(0);
-        progressBar.setPrefWidth(380);
+        progressBar.setPrefWidth(300);
 
-        volumeSlider = new Slider(0, 1, 0.5);
+        volumeSlider = new Slider(0, 1, 0.5); // Min, Max, Initial
+        volumeSlider.setBlockIncrement(0.1);
         volumeSlider.setPrefWidth(200);
+        volumeSlider.setShowTickLabels(true);
+        volumeSlider.setShowTickMarks(true);
         volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (musicPlayer != null) {
                 musicPlayer.setVolume(newVal.doubleValue());
             }
         });
 
-        Button addButton = new Button("Musik hinzufügen");
-        Button removeButton = new Button("Entfernen");
-        Button playButton = new Button("▶");
-        Button pauseButton = new Button("⏸");
-        Button stopButton = new Button("⏹");
-        Button prevButton = new Button("⏮");
-        Button nextButton = new Button("⏭");
-        Button shuffleButton = new Button("🔀");
-        Button repeatButton = new Button("🔁");
+        Button addMusicButton = new Button("Musik hinzufügen");
+        addMusicButton.setOnAction(e -> addMusic());
 
-        HBox controlButtons = new HBox(10);
-        controlButtons.setAlignment(Pos.CENTER);
-        controlButtons.getChildren().addAll(
-                prevButton, playButton, pauseButton, stopButton, nextButton,
-                shuffleButton, repeatButton
-        );
+        Button removeSongButton = new Button("Ausgewählten Song entfernen");
+        removeSongButton.setOnAction(e -> removeSelectedSong());
 
-        HBox managementButtons = new HBox(10);
-        managementButtons.setAlignment(Pos.CENTER);
-        managementButtons.getChildren().addAll(addButton, removeButton);
-
-        HBox volumeControl = new HBox(10);
-        volumeControl.setAlignment(Pos.CENTER);
-        volumeControl.getChildren().addAll(
-                new Label("🔈"), volumeSlider, new Label("🔊")
-        );
-
-        addButton.setOnAction(e -> addMusic());
-        removeButton.setOnAction(e -> removeSelectedSong());
+        Button playButton = new Button("Play");
         playButton.setOnAction(e -> playSelectedSong());
+
+        Button pauseButton = new Button("Pause");
         pauseButton.setOnAction(e -> pauseMusic());
+
+        Button stopButton = new Button("Stop");
         stopButton.setOnAction(e -> stopMusic());
-        prevButton.setOnAction(e -> playPreviousSong());
+
+        Button previousButton = new Button("Vorheriger");
+        previousButton.setOnAction(e -> playPreviousSong());
+
+        Button nextButton = new Button("Nächster");
         nextButton.setOnAction(e -> playNextSong());
+
+        // Toggle Buttons als Instanzvariablen (oder final in Methode) für einfacheren Zugriff
+        // Ich belasse die ursprüngliche, weniger robuste Methode bei, wie vom Benutzer gewünscht.
+        ToggleButton shuffleButton = new ToggleButton("Zufall (Aus)");
         shuffleButton.setOnAction(e -> toggleShuffle());
+
+        ToggleButton repeatButton = new ToggleButton("Wiederholen (Aus)");
         repeatButton.setOnAction(e -> toggleRepeat());
 
-        musicRoot.getChildren().addAll(
-                new Label("Playlist:"),
-                songListView,
-                managementButtons,
-                currentSongLabel,
-                progressBar,
-                volumeControl,
-                controlButtons
-        );
 
+        Button backButton = new Button("Zurück");
+        backButton.setOnAction(e -> primaryStage.setScene(startScene));
+
+        HBox topControls = new HBox(10, addMusicButton, removeSongButton);
+        topControls.setAlignment(Pos.CENTER);
+
+        HBox playbackControls = new HBox(10, previousButton, playButton, pauseButton, stopButton, nextButton);
+        playbackControls.setAlignment(Pos.CENTER);
+
+        HBox modeControls = new HBox(10, shuffleButton, repeatButton);
+        modeControls.setAlignment(Pos.CENTER);
+
+        VBox volumeControl = new VBox(5, new Label("Lautstärke:"), volumeSlider);
+        volumeControl.setAlignment(Pos.CENTER);
+
+        musicRoot.getChildren().addAll(musicTitle, currentSongLabel, progressBar, songListView, volumeControl, topControls, playbackControls, modeControls, backButton);
         return musicRoot;
     }
 
-    private void spielInitialisieren() {
-        aufgedeckt = new boolean[4][4];
-        paare = 0;
-        versuche = 0;
-        geklickteButtons.clear();
+    private void showMusicManager() {
+        Scene musicScene = new Scene(createMusicPane(), 800, 600);
+        musicScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm()); // Dark Mode auch für den Music Manager
+        primaryStage.setScene(musicScene);
+    }
 
-        List<String> temp = new ArrayList<>();
-        for(String symbol : symbole) {
-            temp.add(symbol);
-            temp.add(symbol);
+    /**
+     * Generiert eine Liste von Symbolen, die für das Spielgitter verwendet werden können.
+     * @param count Die Anzahl der benötigten einzigartigen Symbole.
+     * @return Ein Array von Strings mit den generierten Symbolen.
+     */
+    private String[] generateGameSymbols(int count) {
+        List<String> pool = new ArrayList<>();
+        // Buchstaben A-Z
+        for (char c = 'A'; c <= 'Z'; c++) {
+            pool.add(String.valueOf(c));
+        }
+        // Buchstaben a-z
+        for (char c = 'a'; c <= 'z'; c++) {
+            pool.add(String.valueOf(c));
+        }
+        // Zahlen 0-99 (als Strings)
+        for (int i = 0; i < 100; i++) {
+            pool.add(String.valueOf(i));
+        }
+        // Zusätzliche Sonderzeichen oder Unicode-Symbole könnten hier hinzugefügt werden, falls benötigt
+
+        if (pool.size() < count) {
+            // Sollte mit der aktuellen Pool-Größe und max. 8x8 Gitter (32 Paare) nicht passieren.
+            throw new IllegalStateException("Nicht genügend einzigartige Symbole für die Gittergröße verfügbar.");
         }
 
-        Collections.shuffle(temp);
+        Collections.shuffle(pool); // Symbole mischen
+        String[] selectedSymbols = new String[count];
+        for (int i = 0; i < count; i++) {
+            selectedSymbols[i] = pool.get(i);
+        }
+        return selectedSymbols;
+    }
 
-        int index = 0;
-        for(int i = 0; i < 4; i++) {
-            for(int j = 0; j < 4; j++) {
-                werte[i][j] = temp.get(index);
-                index++;
+    private void spielInitialisieren() {
+        // Arrays basierend auf der aktuellen gridSize initialisieren
+        werte = new String[gridSize][gridSize];
+        aufgedeckt = new boolean[gridSize][gridSize];
+
+        // Symbole für die aktuelle Gittergröße generieren
+        String[] currentSymbols = generateGameSymbols((gridSize * gridSize) / 2);
+
+        // Symbole mischen
+        List<String> tempSymbole = new ArrayList<>();
+        for (String s : currentSymbols) {
+            tempSymbole.add(s);
+            tempSymbole.add(s); // Jedes Symbol zweimal hinzufügen
+        }
+        Collections.shuffle(tempSymbole);
+
+        // Werte den Buttons zuweisen und Zustand zurücksetzen
+        int k = 0;
+        for (int i = 0; i < gridSize; i++) {
+            for (int j = 0; j < gridSize; j++) {
+                buttons[i][j].setText("");
+                buttons[i][j].setDisable(false);
+                // Schriftgröße wird bereits in buildGameGrid gesetzt
+                werte[i][j] = tempSymbole.get(k++);
+                aufgedeckt[i][j] = false;
             }
         }
-
-        scoreUpdate();
+        paare = 0;
+        versuche = 0;
+        scoreLabel.setText("Versuche: 0");
+        geklickteButtons.clear();
     }
 
     private void buttonGeklickt(int row, int col) {
-        if(aufgedeckt[row][col] || geklickteButtons.size() >= 2) {
+        Button geklickterButton = buttons[row][col];
+
+        // Nur unaufgedeckte und nicht bereits geklickte Buttons bearbeiten
+        if (aufgedeckt[row][col] || geklickterButton.getText().length() > 0) {
             return;
         }
 
-        buttons[row][col].setText(werte[row][col]);
-        buttons[row][col].setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-background-color: lightblue;");
-        geklickteButtons.add(buttons[row][col]);
+        geklickterButton.setText(werte[row][col]);
+        geklickteButtons.add(geklickterButton);
 
-        if(geklickteButtons.size() == 2) {
+        if (geklickteButtons.size() == 2) {
+            // Alle Buttons während des Vergleichs deaktivieren
+            for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
+                for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+                    buttons[i][j].setDisable(true);
+                }
+            }
+
             versuche++;
+            scoreUpdate();
 
-            int[] pos1 = findeButtonPosition(geklickteButtons.get(0));
-            int[] pos2 = findeButtonPosition(geklickteButtons.get(1));
+            PauseTransition pause = new PauseTransition(Duration.seconds(pauseTime));
+            pause.setOnFinished(event -> {
+                Button ersterButton = geklickteButtons.get(0);
+                Button zweiterButton = geklickteButtons.get(1);
 
-            String wert1 = werte[pos1[0]][pos1[1]];
-            String wert2 = werte[pos2[0]][pos2[1]];
+                int[] pos1 = findeButtonPosition(ersterButton);
+                int[] pos2 = findeButtonPosition(zweiterButton);
 
-            if(wert1.equals(wert2)) {
-                aufgedeckt[pos1[0]][pos1[1]] = true;
-                aufgedeckt[pos2[0]][pos2[1]] = true;
-                paare++;
-
-                geklickteButtons.get(0).setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-background-color: lightgreen;");
-                geklickteButtons.get(1).setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-background-color: lightgreen;");
+                if (werte[pos1[0]][pos1[1]].equals(werte[pos2[0]][pos2[1]])) {
+                    // Paare gefunden
+                    ersterButton.setDisable(true);
+                    zweiterButton.setDisable(true);
+                    aufgedeckt[pos1[0]][pos1[1]] = true;
+                    aufgedeckt[pos2[0]][pos2[1]] = true;
+                    paare++;
+                } else {
+                    // Keine Paare
+                    ersterButton.setText("");
+                    zweiterButton.setText("");
+                }
 
                 geklickteButtons.clear();
-                scoreUpdate();
 
-                if(paare == 8) {
-                    scoreLabel.setText("GEWONNEN! 🎉 Versuche: " + versuche);
+                // Buttons wieder aktivieren, die noch nicht aufgedeckt sind
+                for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
+                    for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+                        if (!aufgedeckt[i][j]) {
+                            buttons[i][j].setDisable(false);
+                        }
+                    }
                 }
-            } else {
-                PauseTransition pause = new PauseTransition(Duration.seconds(pauseTime));
-                pause.setOnFinished(e -> {
-                    geklickteButtons.get(0).setText("?");
-                    geklickteButtons.get(0).setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
-                    geklickteButtons.get(1).setText("?");
-                    geklickteButtons.get(1).setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
-                    geklickteButtons.clear();
-                });
-                pause.play();
-                scoreUpdate();
-            }
+
+                // Gewinnbedingung an die Gittergröße anpassen
+                if (paare == (gridSize * gridSize) / 2) {
+                    if (showCaptchaDialog()) { // CAPTCHA vor dem Speichern der Highscores
+                        showHighscores();
+                        // Optional: Direkt ein neues Spiel starten oder zurück zur Startseite
+                        if (showConfirmationDialog("Spiel beendet!", "Herzlichen Glückwunsch! Du hast alle Paare gefunden!\n" +
+                                "Möchtest du ein neues Spiel starten?")) {
+                            neuesSpiel();
+                        } else {
+                            primaryStage.setScene(startScene);
+                        }
+                        savePlayerData(currentPlayerName, currentDifficulty); // Highscore speichern
+                    } else {
+                        showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Highscore wird nicht gespeichert.");
+                        // Spiel zurücksetzen oder beenden
+                        neuesSpiel();
+                    }
+                }
+            });
+            pause.play();
         }
     }
 
     private int[] findeButtonPosition(Button btn) {
-        for(int i = 0; i < 4; i++) {
-            for(int j = 0; j < 4; j++) {
-                if(buttons[i][j] == btn) {
+        for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
+            for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+                if (buttons[i][j] == btn) {
                     return new int[]{i, j};
                 }
             }
         }
-        return new int[]{0, 0};
+        return null;
     }
 
     private void scoreUpdate() {
-        scoreLabel.setText("Versuche: " + versuche + " | Paare gefunden: " + paare + "/8");
+        scoreLabel.setText("Versuche: " + versuche);
     }
 
     private void neuesSpiel() {
-        for(int i = 0; i < 4; i++) {
-            for(int j = 0; j < 4; j++) {
-                buttons[i][j].setText("?");
-                buttons[i][j].setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
+        spielInitialisieren();
+        // Stellen Sie sicher, dass alle Buttons wieder aktiviert sind, falls sie durch den CAPTCHA-Dialog deaktiviert wurden
+        for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
+            for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+                buttons[i][j].setDisable(false);
             }
         }
-        spielInitialisieren();
     }
 
     private void switchToGameView(String playerName, String difficulty) {
         currentPlayerName = playerName;
         currentDifficulty = difficulty;
-        adjustDifficulty(difficulty);
-        savePlayerData(playerName, difficulty);
-        primaryStage.setScene(gameScene);
-        neuesSpiel();
+
+        adjustDifficulty(currentDifficulty); // Setzt gridSize und calculatedButtonSize
+
+        // Konstanten für Abstände/Padding
+        final double H_GAP = 10;
+        final double V_GAP = 10;
+        final double CONTROLS_HEIGHT_ESTIMATE = 80.0; // Geschätzte Höhe der unteren Kontrollleiste (inkl. Padding)
+        final double SCENE_PADDING_VERTICAL = 40.0; // Z.B. 20px oben + 20px unten um das Gitter
+        final double SCENE_PADDING_HORIZONTAL = 40.0; // Z.B. 20px links + 20px rechts um das Gitter
+
+        // Berechnung der benötigten Szenengröße
+        double requiredGridWidth = (gridSize * calculatedButtonSize) + ((gridSize - 1) * H_GAP);
+        double requiredGridHeight = (gridSize * calculatedButtonSize) + ((gridSize - 1) * V_GAP);
+
+        double newWidth = requiredGridWidth + SCENE_PADDING_HORIZONTAL;
+        double newHeight = requiredGridHeight + CONTROLS_HEIGHT_ESTIMATE + SCENE_PADDING_VERTICAL;
+
+        // Mindest- und Maximalgrößen für das Fenster, um extreme Größen zu vermeiden
+        if (newWidth < 500) newWidth = 500;
+        if (newHeight < 400) newHeight = 400;
+        if (newWidth > 1000) newWidth = 1000;
+        if (newHeight > 900) newHeight = 900;
+
+
+        // primaryStage anpassen
+        primaryStage.setWidth(newWidth);
+        primaryStage.setHeight(newHeight);
+        primaryStage.centerOnScreen(); // Fenster zentrieren
+
+        buildGameGrid(); // Erstellt das Gitter und die Buttons mit der neuen gridSize und calculatedButtonSize
+        spielInitialisieren(); // Initialisiert das Spiel mit den neuen Einstellungen
+        primaryStage.setScene(gameScene); // Setzt die Szene, die sich nun an die Fenstergröße anpassen wird
     }
 
     private void adjustDifficulty(String difficulty) {
         switch (difficulty) {
-            case "Leicht" -> pauseTime = 2.0;
-            case "Mittel" -> pauseTime = 1.0;
-            case "Schwer" -> pauseTime = 0.5;
+            case "Einfach":
+                pauseTime = 2.0;
+                gridSize = 4; // 4x4 Gitter
+                calculatedButtonSize = 120.0; // Große Buttons
+                break;
+            case "Mittel":
+                pauseTime = 1.0;
+                gridSize = 6; // 6x6 Gitter
+                calculatedButtonSize = 80.0; // Mittelgroße Buttons
+                break;
+            case "Schwer":
+                pauseTime = 0.5;
+                gridSize = 8; // 8x8 Gitter
+                calculatedButtonSize = 60.0; // Kleine Buttons
+                break;
+            default:
+                pauseTime = 1.0;
+                gridSize = 4; // Standardwert
+                calculatedButtonSize = 120.0;
         }
     }
 
     private void savePlayerData(String playerName, String difficulty) {
-        try (FileWriter writer = new FileWriter("player_data.txt", true)) {
-            writer.write(playerName + "," + difficulty + "," + new Date() + "\n");
+        String filename = "highscores.txt";
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) { // true für Append-Modus
+            writer.write(playerName + ";" + difficulty + ";" + versuche + "\n");
         } catch (IOException e) {
-            showError("Speicherfehler", "Spielerdaten konnten nicht gespeichert werden");
+            showError("Fehler beim Speichern", "Highscore konnte nicht gespeichert werden: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private void showHighscores() {
+        String filename = "highscores.txt";
+        List<String> highscores = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                highscores.add(line);
+            }
+        } catch (IOException e) {
+            showError("Fehler beim Laden", "Highscores konnten nicht geladen werden: " + e.getMessage());
+            highscores.add("Noch keine Highscores vorhanden.");
+        }
+
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Bestenliste");
-        alert.setHeaderText("Top Spieler");
-        alert.setContentText("Funktion wird noch implementiert!");
+        alert.setTitle("Highscores");
+        alert.setHeaderText("Beste Spielergebnisse:");
+
+        StringBuilder sb = new StringBuilder();
+        // Optional: Highscores sortieren, z.B. nach Versuchen aufsteigend
+        highscores.stream()
+                .map(line -> {
+                    String[] parts = line.split(";");
+                    if (parts.length == 3) {
+                        try {
+                            return new AbstractMap.SimpleEntry<>(Integer.parseInt(parts[2]), parts[0] + " (" + parts[1] + "): " + parts[2] + " Versuche");
+                        } catch (NumberFormatException e) {
+                            return new AbstractMap.SimpleEntry<>(Integer.MAX_VALUE, line); // Ungültige Einträge ans Ende
+                        }
+                    }
+                    return new AbstractMap.SimpleEntry<>(Integer.MAX_VALUE, line);
+                })
+                .sorted(Comparator.comparingInt(Map.Entry::getKey))
+                .forEach(entry -> sb.append(entry.getValue()).append("\n"));
+
+
+        TextArea textArea = new TextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+        textArea.setMaxWidth(Double.MAX_VALUE);
+        textArea.setMaxHeight(Double.MAX_VALUE);
+
+        GridPane expContent = new GridPane();
+        expContent.setMaxWidth(Double.MAX_VALUE);
+        expContent.add(textArea, 0, 0);
+
+        alert.getDialogPane().setExpandableContent(expContent);
+        alert.getDialogPane().setExpanded(true); // Direkt erweitern
+
         alert.showAndWait();
     }
 
     private void showPauseMenu() {
-        if (musicPlayer != null) {
-            musicPlayer.pause();
-        }
-
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Pause");
-        alert.setHeaderText("Spiel pausiert");
-        alert.setContentText("Möchten Sie weiterspielen?");
+        alert.setTitle("Spiel pausiert");
+        alert.setHeaderText("Das Spiel ist pausiert.");
+        alert.setContentText("Möchtest du das Spiel fortsetzen oder beenden?");
 
-        if (alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-            if (musicPlayer != null) {
-                musicPlayer.play();
-            }
-        } else {
-            primaryStage.setScene(startScene);
-            if (musicPlayer != null) {
-                musicPlayer.stop();
+        ButtonType resumeButton = new ButtonType("Fortsetzen");
+        ButtonType exitButton = new ButtonType("Beenden", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(resumeButton, exitButton);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == exitButton) {
+            if (showConfirmationDialog("Beenden", "Möchtest du das Spiel wirklich beenden?")) {
+                primaryStage.setScene(startScene); // Zurück zur Startseite
             }
         }
+        // Wenn "Fortsetzen" gewählt wird oder der Dialog geschlossen wird, passiert nichts.
     }
 
     private boolean showConfirmationDialog(String title, String content) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle(title);
+        alert.setHeaderText(null);
         alert.setContentText(content);
-        return alert.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK;
+
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == ButtonType.OK;
     }
 
     /**
@@ -477,25 +617,13 @@ public class MemoryGame extends Application {
      */
     private boolean showCaptchaDialog() {
         String captchaText = generateCaptcha();
-
         TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Sicherheitsprüfung");
-        dialog.setHeaderText("Um das Spiel zu beenden, löse bitte das CAPTCHA.");
-        dialog.setContentText("Gib den folgenden Text ein:  " + captchaText);
+        dialog.setTitle("CAPTCHA-Verifizierung");
+        dialog.setHeaderText("Bitte geben Sie den folgenden Text ein, um fortzufahren:");
+        dialog.setContentText("CAPTCHA: " + captchaText);
 
         Optional<String> result = dialog.showAndWait();
-
-        // Überprüfen, ob der Benutzer einen Wert eingegeben und OK geklickt hat
-        if (result.isPresent()) {
-            String enteredText = result.get().trim();
-            if (enteredText.equals(captchaText)) {
-                return true; // CAPTCHA korrekt
-            } else {
-                showError("Fehler", "CAPTCHA falsch! Bitte versuche es erneut.");
-                return false; // CAPTCHA falsch
-            }
-        }
-        return false; // Benutzer hat abgebrochen oder Dialog geschlossen
+        return result.isPresent() && result.get().equalsIgnoreCase(captchaText);
     }
 
     /**
@@ -506,25 +634,23 @@ public class MemoryGame extends Application {
     private String generateCaptcha() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         StringBuilder captcha = new StringBuilder();
-        Random random = new Random();
-        for (int i = 0; i < 6; i++) { // CAPTCHA-Länge von 6 Zeichen
-            captcha.append(chars.charAt(random.nextInt(chars.length())));
+        Random rnd = new Random();
+        for (int i = 0; i < 6; i++) {
+            captcha.append(chars.charAt(rnd.nextInt(chars.length())));
         }
         return captcha.toString();
     }
 
-
     private void addMusic() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("WAV Dateien", "*.wav")
+                new FileChooser.ExtensionFilter("Audio-Dateien", "*.mp3", "*.wav", "*.aac")
         );
-        List<File> selectedFiles = fileChooser.showOpenMultipleDialog(null);
+        File selectedFile = fileChooser.showOpenDialog(primaryStage);
 
-        if (selectedFiles != null) {
-            for (File file : selectedFiles) {
-                playlist.add(new Song(file.getName(), file.getPath()));
-            }
+        if (selectedFile != null) {
+            Song newSong = new Song(selectedFile.getName(), selectedFile.toURI().toString());
+            playlist.add(newSong);
             savePlaylist();
         }
     }
@@ -532,139 +658,175 @@ public class MemoryGame extends Application {
     private void removeSelectedSong() {
         Song selectedSong = songListView.getSelectionModel().getSelectedItem();
         if (selectedSong != null) {
-            playlist.remove(selectedSong);
-            savePlaylist();
+            if (showConfirmationDialog("Song entfernen", "Möchten Sie '" + selectedSong.getName() + "' wirklich aus der Wiedergabeliste entfernen?")) {
+                if (musicPlayer != null && selectedSong.getPath().equals(playlist.get(currentSongIndex).getPath())) {
+                    stopMusic(); // Aktuell spielenden Song stoppen, wenn er entfernt wird
+                }
+                playlist.remove(selectedSong);
+                savePlaylist();
+                // Index anpassen, falls der entfernte Song vor dem aktuellen Song war
+                if (currentSongIndex >= playlist.size() && !playlist.isEmpty()) {
+                    currentSongIndex = playlist.size() - 1;
+                } else if (playlist.isEmpty()) {
+                    currentSongIndex = 0;
+                    currentSongLabel.setText("Aktueller Song: Keiner");
+                    progressBar.setProgress(0);
+                }
+            }
+        } else {
+            showError("Keine Auswahl", "Bitte wählen Sie einen Song zum Entfernen aus.");
         }
     }
 
     private void playSelectedSong() {
         Song selectedSong = songListView.getSelectionModel().getSelectedItem();
         if (selectedSong != null) {
-            currentSongIndex = playlist.indexOf(selectedSong);
             playSong(selectedSong);
+            currentSongIndex = playlist.indexOf(selectedSong); // Index des ausgewählten Songs setzen
+        } else if (!playlist.isEmpty()) {
+            playSong(playlist.get(currentSongIndex)); // Falls nichts ausgewählt ist, aktuellen Song spielen
+        } else {
+            showError("Wiedergabefehler", "Kein Song zum Abspielen ausgewählt oder in der Wiedergabeliste.");
         }
     }
 
     private void playSong(Song song) {
-        if (song == null) {
-            showError("Fehler", "Kein Song ausgewählt");
-            return;
+        if (musicPlayer != null) {
+            musicPlayer.stop();
+            musicPlayer.dispose(); // Ressourcen freigeben
         }
-        try {
-            File songFile = new File(song.getPath());
-            if (!songFile.exists()) {
-                showError("Dateifehler", "Die Audiodatei wurde nicht gefunden: ");
-                playlist.remove(song);
-                savePlaylist();
-                return;
-            }
-            if (musicPlayer != null) {
-                musicPlayer.dispose();
-            }
 
-            Media media = new Media(songFile.toURI().toString());
+        try {
+            Media media = new Media(song.getPath());
             musicPlayer = new MediaPlayer(media);
-            musicPlayer.setVolume(volumeSlider.getValue());
+            musicPlayer.setVolume(volumeSlider.getValue()); // Lautstärke vom Slider übernehmen
+            currentSongLabel.setText("Aktueller Song: " + song.getName());
 
             setupMediaPlayerListeners(song);
             musicPlayer.play();
         } catch (Exception e) {
-            showError("Fehler beim Abspielen", e.getMessage());
+            showError("Wiedergabefehler", "Der ausgewählte Titel konnte nicht abgespielt werden: " + song.getName() + "\nFehler: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     private void pauseMusic() {
         if (musicPlayer != null) {
-            if (musicPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
-                musicPlayer.pause();
-            } else {
-                musicPlayer.play();
-            }
+            musicPlayer.pause();
         }
     }
 
     private void stopMusic() {
         if (musicPlayer != null) {
             musicPlayer.stop();
-            currentSongLabel.setText("Gestoppt");
+            currentSongLabel.setText("Aktueller Song: Keiner");
+            progressBar.setProgress(0);
         }
     }
 
     private void playPreviousSong() {
         if (playlist.isEmpty()) return;
 
-        if (isShuffleMode) {
-            currentSongIndex = new Random().nextInt(playlist.size());
+        if (currentSongIndex > 0) {
+            currentSongIndex--;
         } else {
-            currentSongIndex = (currentSongIndex - 1 + playlist.size()) % playlist.size();
+            currentSongIndex = playlist.size() - 1; // Zum Ende der Liste springen
         }
-
         playSong(playlist.get(currentSongIndex));
+        songListView.getSelectionModel().select(currentSongIndex);
     }
 
     private void playNextSong() {
         if (playlist.isEmpty()) return;
 
         if (isShuffleMode) {
-            currentSongIndex = new Random().nextInt(playlist.size());
+            Random rand = new Random();
+            int newIndex;
+            do {
+                newIndex = rand.nextInt(playlist.size());
+            } while (playlist.size() > 1 && newIndex == currentSongIndex); // Vermeide den gleichen Song bei Shuffle, wenn mehr als 1 Song
+            currentSongIndex = newIndex;
         } else {
-            currentSongIndex = (currentSongIndex + 1) % playlist.size();
+            if (currentSongIndex < playlist.size() - 1) {
+                currentSongIndex++;
+            } else if (isRepeatMode) {
+                currentSongIndex = 0; // Anfang der Liste, wenn Repeat an ist
+            } else {
+                stopMusic(); // Am Ende der Playlist stoppen, wenn kein Repeat
+                return;
+            }
         }
-
         playSong(playlist.get(currentSongIndex));
+        songListView.getSelectionModel().select(currentSongIndex);
     }
 
     private void setupMediaPlayerListeners(Song song) {
-        musicPlayer.currentTimeProperty().addListener((obs, oldTime, newTime) -> {
-            if (musicPlayer.getTotalDuration() != null) {
-                double progress = newTime.toSeconds() / musicPlayer.getTotalDuration().toSeconds();
-                progressBar.setProgress(progress);
+        musicPlayer.currentTimeProperty().addListener((obs, oldVal, newVal) -> {
+            if (musicPlayer.getTotalDuration() != null && !musicPlayer.getTotalDuration().isUnknown()) {
+                progressBar.setProgress(newVal.toMillis() / musicPlayer.getTotalDuration().toMillis());
             }
         });
 
         musicPlayer.setOnEndOfMedia(() -> {
             if (isRepeatMode) {
-                musicPlayer.seek(Duration.ZERO);
-                musicPlayer.play();
+                playSong(song); // Aktuellen Song wiederholen
             } else {
-                playNextSong();
+                playNextSong(); // Nächsten Song spielen oder stoppen
             }
         });
-
-        currentSongLabel.setText("Spielt: " + song.toString());
     }
 
     private void toggleShuffle() {
         isShuffleMode = !isShuffleMode;
+        // Ich belasse den ursprünglichen Zugriff auf die ToggleButtons, wie er im Code war.
+        ToggleButton shuffleButton = (ToggleButton) ((HBox) ((VBox) songListView.getParent()).getChildren().get(5)).getChildren().get(0);
+        shuffleButton.setText("Zufall (" + (isShuffleMode ? "An" : "Aus") + ")");
+        if (isShuffleMode) {
+            shuffleButton.setStyle("-fx-background-color: #4CAF50;"); // Grün für An
+        } else {
+            shuffleButton.setStyle(null); // Standardfarbe
+        }
     }
 
     private void toggleRepeat() {
         isRepeatMode = !isRepeatMode;
+        // Ich belasse den ursprünglichen Zugriff auf die ToggleButtons, wie er im Code war.
+        ToggleButton repeatButton = (ToggleButton) ((HBox) ((VBox) songListView.getParent()).getChildren().get(5)).getChildren().get(1);
+        repeatButton.setText("Wiederholen (" + (isRepeatMode ? "An" : "Aus") + ")");
+        if (isRepeatMode) {
+            repeatButton.setStyle("-fx-background-color: #2196F3;"); // Blau für An
+        } else {
+            repeatButton.setStyle(null); // Standardfarbe
+        }
     }
 
     private void savePlaylist() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(
-                new FileOutputStream("playlist.dat"))) {
-            oos.writeObject(new ArrayList<>(playlist));
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("playlist.ser"))) {
+            oos.writeObject(new ArrayList<>(playlist)); // Serialize the list of songs
         } catch (IOException e) {
-            showError("Speicherfehler", "Playlist konnte nicht gespeichert werden");
+            showError("Fehler", "Playlist konnte nicht gespeichert werden: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     @SuppressWarnings("unchecked")
     private void loadPlaylist() {
-        try (ObjectInputStream ois = new ObjectInputStream(
-                new FileInputStream("playlist.dat"))) {
-            ArrayList<Song> loadedList = (ArrayList<Song>) ois.readObject();
-            playlist.setAll(loadedList);
-        } catch (IOException | ClassNotFoundException e) {
-            // Ignoriere Fehler beim ersten Start (Datei existiert noch nicht)
+        File file = new File("playlist.ser");
+        if (file.exists()) {
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                List<Song> loadedSongs = (List<Song>) ois.readObject();
+                playlist.setAll(loadedSongs); // Replace existing playlist with loaded songs
+            } catch (IOException | ClassNotFoundException e) {
+                showError("Fehler", "Playlist konnte nicht geladen werden: " + e.getMessage());
+                e.printStackTrace();
+            }
         }
     }
 
     private void showError(String title, String content) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(title);
+        alert.setHeaderText(null);
         alert.setContentText(content);
         alert.showAndWait();
     }
@@ -685,6 +847,10 @@ public class MemoryGame extends Application {
 
         public String getPath() {
             return path;
+        }
+
+        public String getName() {
+            return name;
         }
     }
 

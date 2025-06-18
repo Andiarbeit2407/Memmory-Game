@@ -1,0 +1,59 @@
+/* Grundfarben für den Dark Mode */
+.root {
+    -fx-base: #2e2e2e; /* Dunkle Grundfarbe */
+    -fx-background: #3c3f41; /* Dunklerer Hintergrund */
+    -fx-control-inner-background: #4b4b4b; /* Noch dunkler für innere Steuerelemente */
+    -fx-text-fill: #cccccc; /* Helle graue Textfarbe */
+}
+
+/* Farben für Labels */
+.label {
+    -fx-text-fill: #cccccc;
+}
+
+/* Farben für Buttons */
+.button {
+    -fx-background-color: #555555;
+    -fx-text-fill: #eeeeee;
+    -fx-border-color: #777777;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+}
+
+/* Hover-Effekt für Buttons */
+.button:hover {
+    -fx-background-color: #666666;
+}
+
+/* Farben für Textfelder, Listenansichten und Tabellenansichten */
+.text-field, .list-view, .table-view {
+    -fx-control-inner-background: #4b4b4b;
+    -fx-text-fill: #eeeeee;
+    -fx-highlight-fill: #5e7a96; /* Eine leicht bläuliche Hervorhebung */
+    -fx-highlight-text-fill: #ffffff;
+    -fx-background-color: #4b4b4b;
+    -fx-border-color: #666666;
+}
+
+/* Farben für Scrollbalken */
+.scroll-bar:vertical .track, .scroll-bar:horizontal .track {
+    -fx-background-color: #3c3f41;
+}
+
+.scroll-bar:vertical .thumb, .scroll-bar:horizontal .thumb {
+    -fx-background-color: #666666;
+}
+
+/* Farben für Tab-Bereiche */
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #3c3f41;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #555555;
+    -fx-text-fill: #eeeeee;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #4b4b4b;
+}

@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.example</groupId>
-    <artifactId>Memmory-Game</artifactId>
+    <artifactId>Memory-Game</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Memmory-Game</name>
 
@@ -69,7 +69,7 @@
                         <!-- Default configuration for running with: mvn clean javafx:run -->
                         <id>default-cli</id>
                         <configuration>
-                            <mainClass>com.example.memmorygame/com.example.memmorygame.MemoryGame</mainClass>
+                            <mainClass>com.example.memmorygame/com.example.memorygame.MemoryGame</mainClass>
                             <launcher>app</launcher>
                             <jlinkZipName>app</jlinkZipName>
                             <jlinkImageName>app</jlinkImageName>

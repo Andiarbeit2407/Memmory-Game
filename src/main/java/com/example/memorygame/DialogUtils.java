@@ -1,5 +1,5 @@
 // DialogUtils.java - Utility class for dialogs
-package com.example.memmorygame;
+package com.example.memorygame;
 
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;

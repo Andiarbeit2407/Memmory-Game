@@ -1,4 +1,4 @@
-package com.example.memmorygame;
+package com.example.memorygame;
 
 import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;

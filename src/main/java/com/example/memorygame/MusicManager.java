@@ -1,4 +1,4 @@
-package com.example.memmorygame;
+package com.example.memorygame;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

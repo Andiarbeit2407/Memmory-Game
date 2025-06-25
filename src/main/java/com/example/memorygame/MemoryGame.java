@@ -1,4 +1,4 @@
-package com.example.memmorygame;
+package com.example.memorygame;
 
 import javafx.application.Application;
 import javafx.scene.Scene;

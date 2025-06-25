@@ -1,4 +1,4 @@
-package com.example.memmorygame;
+package com.example.memorygame;
 
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;

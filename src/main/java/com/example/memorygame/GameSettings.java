@@ -1,4 +1,4 @@
-package com.example.memmorygame;
+package com.example.memorygame;
 
 public class GameSettings {
 

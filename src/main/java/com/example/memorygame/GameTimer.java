@@ -4,6 +4,9 @@ import javafx.animation.Timeline;
 import javafx.animation.KeyFrame;
 import javafx.util.Duration;
 
+/**
+ * Timer für das Memory-Spiel.
+ */
 public class GameTimer {
 
     private Timeline timeline;
@@ -12,10 +15,17 @@ public class GameTimer {
     private boolean isActive;
     private Runnable updateCallback;
 
+    /**
+     * Konstruktor.
+     * @param updateCallback Callback für UI-Updates.
+     */
     public GameTimer(Runnable updateCallback) {
         this.updateCallback = updateCallback;
     }
 
+    /**
+     * Startet den Timer.
+     */
     public void start() {
         startTime = System.currentTimeMillis();
         isActive = true;
@@ -33,6 +43,9 @@ public class GameTimer {
         timeline.play();
     }
 
+    /**
+     * Stoppt den Timer.
+     */
     public void stop() {
         isActive = false;
         if (timeline != null) {
@@ -41,18 +54,28 @@ public class GameTimer {
         endTime = System.currentTimeMillis();
     }
 
+    /**
+     * Pausiert den Timer.
+     */
     public void pause() {
         if (timeline != null && isActive) {
             timeline.pause();
         }
     }
 
+    /**
+     * Setzt den Timer fort.
+     */
     public void resume() {
         if (timeline != null && isActive) {
             timeline.play();
         }
     }
 
+    /**
+     * Gibt die vergangene Zeit in Sekunden zurück.
+     * @return Sekunden
+     */
     public long getElapsedTimeInSeconds() {
         if (endTime > startTime) {
             return (endTime - startTime) / 1000;
@@ -62,6 +85,10 @@ public class GameTimer {
         return 0;
     }
 
+    /**
+     * Gibt die vergangene Zeit formatiert als mm:ss zurück.
+     * @return Formatierte Zeit
+     */
     public String getFormattedTime() {
         long seconds = getElapsedTimeInSeconds();
         long minutes = seconds / 60;
@@ -69,6 +96,10 @@ public class GameTimer {
         return String.format("%02d:%02d", minutes, remainingSeconds);
     }
 
+    /**
+     * Gibt zurück, ob der Timer aktiv ist.
+     * @return true, wenn aktiv
+     */
     public boolean isActive() {
         return isActive;
     }

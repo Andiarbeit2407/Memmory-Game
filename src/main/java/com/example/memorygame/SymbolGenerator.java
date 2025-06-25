@@ -2,8 +2,16 @@ package com.example.memorygame;
 
 import java.util.*;
 
+/**
+ * Generiert Symbole für das Memory-Spiel.
+ */
 public class SymbolGenerator {
 
+    /**
+     * Generiert eine Liste von eindeutigen Symbolen.
+     * @param count Anzahl der benötigten Symbole.
+     * @return Array mit Symbolen.
+     */
     public static String[] generateSymbols(int count) {
         List<String> symbolPool = createSymbolPool();
 
@@ -20,25 +28,25 @@ public class SymbolGenerator {
         return selectedSymbols;
     }
 
+    /**
+     * Erstellt den Symbolpool.
+     * @return Liste mit Symbolen.
+     */
     private static List<String> createSymbolPool() {
         List<String> pool = new ArrayList<>();
 
-        // Add letters A-Z
         for (char c = 'A'; c <= 'Z'; c++) {
             pool.add(String.valueOf(c));
         }
 
-        // Add letters a-z
         for (char c = 'a'; c <= 'z'; c++) {
             pool.add(String.valueOf(c));
         }
 
-        // Add numbers 0-99
         for (int i = 0; i < 100; i++) {
             pool.add(String.valueOf(i));
         }
 
-        // Add some special symbols
         String[] specialSymbols = {"♠", "♣", "♥", "♦", "★", "☆", "♪", "♫", "☀", "☽", "☂", "☃"};
         pool.addAll(Arrays.asList(specialSymbols));
 

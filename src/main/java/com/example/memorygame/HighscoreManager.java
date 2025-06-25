@@ -3,16 +3,29 @@ package com.example.memorygame;
 import java.io.*;
 import java.util.*;
 
+/**
+ * Verwaltet die Highscores für das Memory-Spiel.
+ */
 public class HighscoreManager {
 
     private static final String HIGHSCORE_FILE = "highscores.txt";
     private List<HighscoreEntry> highscores;
 
+    /**
+     * Konstruktor. Lädt Highscores aus Datei.
+     */
     public HighscoreManager() {
         this.highscores = new ArrayList<>();
         loadHighscores();
     }
 
+    /**
+     * Speichert einen neuen Score und hält die Top 5 pro Schwierigkeitsgrad.
+     * @param playerName Spielername
+     * @param difficulty Schwierigkeitsgrad
+     * @param timeInSeconds Zeit in Sekunden
+     * @param attempts Versuche
+     */
     public void saveScore(String playerName, String difficulty, long timeInSeconds, int attempts) {
         HighscoreEntry entry = new HighscoreEntry(playerName, difficulty, timeInSeconds, attempts);
         highscores.add(entry);
@@ -35,6 +48,10 @@ public class HighscoreManager {
         saveHighscores();
     }
 
+    /**
+     * Gibt die Highscores formatiert als String zurück.
+     * @return Formatierter Highscore-Text.
+     */
     public String getFormattedHighscores() {
         if (highscores.isEmpty()) {
             return "No high scores yet!";
@@ -61,12 +78,20 @@ public class HighscoreManager {
         return sb.toString();
     }
 
+    /**
+     * Formatiert die Zeit als mm:ss.
+     * @param seconds Sekunden
+     * @return Formatierte Zeit
+     */
     private String formatTime(long seconds) {
         long minutes = seconds / 60;
         long remainingSeconds = seconds % 60;
         return String.format("%02d:%02d", minutes, remainingSeconds);
     }
 
+    /**
+     * Lädt Highscores aus Datei.
+     */
     private void loadHighscores() {
         try (BufferedReader reader = new BufferedReader(new FileReader(HIGHSCORE_FILE))) {
             String line;
@@ -82,10 +107,13 @@ public class HighscoreManager {
             }
             Collections.sort(highscores);
         } catch (IOException e) {
-            // File doesn't exist yet, that's okay
+            // Datei existiert noch nicht
         }
     }
 
+    /**
+     * Speichert Highscores in Datei.
+     */
     private void saveHighscores() {
         try (PrintWriter writer = new PrintWriter(new FileWriter(HIGHSCORE_FILE))) {
             for (HighscoreEntry entry : highscores) {
@@ -99,13 +127,18 @@ public class HighscoreManager {
         }
     }
 
-    // Inner class for highscore entries
+    /**
+     * Repräsentiert einen Highscore-Eintrag.
+     */
     private static class HighscoreEntry implements Comparable<HighscoreEntry> {
         private String playerName;
         private String difficulty;
         private long timeInSeconds;
         private int attempts;
 
+        /**
+         * Konstruktor.
+         */
         public HighscoreEntry(String playerName, String difficulty, long timeInSeconds, int attempts) {
             this.playerName = playerName;
             this.difficulty = difficulty;

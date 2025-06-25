@@ -2,6 +2,9 @@ package com.example.memorygame;
 
 import javafx.scene.control.Button;
 
+/**
+ * Stellt das Spielfeld für das Memory-Spiel dar.
+ */
 public class GameBoard {
 
     private Button[][] buttons;
@@ -9,11 +12,20 @@ public class GameBoard {
     private double buttonSize;
     private ButtonClickHandler clickHandler;
 
+    /**
+     * Funktionales Interface für Button-Klicks.
+     */
     @FunctionalInterface
     public interface ButtonClickHandler {
         void onClick(int row, int col);
     }
 
+    /**
+     * Konstruktor.
+     * @param gridSize Größe des Spielfelds
+     * @param buttonSize Größe der Buttons
+     * @param clickHandler Handler für Klicks
+     */
     public GameBoard(int gridSize, double buttonSize, ButtonClickHandler clickHandler) {
         this.gridSize = gridSize;
         this.buttonSize = buttonSize;
@@ -21,6 +33,9 @@ public class GameBoard {
         createButtons();
     }
 
+    /**
+     * Erstellt die Buttons für das Spielfeld.
+     */
     private void createButtons() {
         buttons = new Button[gridSize][gridSize];
 
@@ -30,7 +45,6 @@ public class GameBoard {
                 btn.setMinSize(buttonSize, buttonSize);
                 btn.setMaxSize(buttonSize, buttonSize);
 
-                // Adjust font size based on grid size
                 int fontSize = getFontSize();
                 btn.setStyle("-fx-font-size: " + fontSize + "px; -fx-background-color: #4a4a4a; -fx-text-fill: white;");
 
@@ -43,12 +57,20 @@ public class GameBoard {
         }
     }
 
+    /**
+     * Gibt die empfohlene Schriftgröße zurück.
+     * @return Schriftgröße
+     */
     private int getFontSize() {
         if (gridSize == 4) return 24;
         else if (gridSize == 6) return 18;
-        else return 14; // for gridSize == 8
+        else return 14;
     }
 
+    /**
+     * Setzt das Spielfeld zurück.
+     * @param symbols Neue Symbole
+     */
     public void reset(String[][] symbols) {
         for (int i = 0; i < gridSize; i++) {
             for (int j = 0; j < gridSize; j++) {
@@ -59,21 +81,40 @@ public class GameBoard {
         }
     }
 
+    /**
+     * Zeigt das Symbol auf einem Button an.
+     * @param row Zeile
+     * @param col Spalte
+     * @param symbol Symbol
+     */
     public void revealButton(int row, int col, String symbol) {
         buttons[row][col].setText(symbol);
         buttons[row][col].setStyle("-fx-font-size: " + getFontSize() + "px; -fx-background-color: #6a6a6a; -fx-text-fill: white;");
     }
 
+    /**
+     * Versteckt das Symbol auf einem Button.
+     * @param row Zeile
+     * @param col Spalte
+     */
     public void hideButton(int row, int col) {
         buttons[row][col].setText("");
         buttons[row][col].setStyle("-fx-font-size: " + getFontSize() + "px; -fx-background-color: #4a4a4a; -fx-text-fill: white;");
     }
 
+    /**
+     * Markiert einen Button als gefunden.
+     * @param row Zeile
+     * @param col Spalte
+     */
     public void markAsFound(int row, int col) {
         buttons[row][col].setDisable(true);
         buttons[row][col].setStyle("-fx-font-size: " + getFontSize() + "px; -fx-background-color: #2d5a3d; -fx-text-fill: #90ee90;");
     }
 
+    /**
+     * Deaktiviert alle Buttons.
+     */
     public void disableAllButtons() {
         for (int i = 0; i < gridSize; i++) {
             for (int j = 0; j < gridSize; j++) {
@@ -82,6 +123,10 @@ public class GameBoard {
         }
     }
 
+    /**
+     * Aktiviert alle nicht aufgedeckten Buttons.
+     * @param revealedPositions Matrix der aufgedeckten Felder
+     */
     public void enableUnrevealedButtons(boolean[][] revealedPositions) {
         for (int i = 0; i < gridSize; i++) {
             for (int j = 0; j < gridSize; j++) {
@@ -92,6 +137,10 @@ public class GameBoard {
         }
     }
 
+    /**
+     * Gibt das Button-Array zurück.
+     * @return Buttons
+     */
     public Button[][] getButtons() {
         return buttons;
     }

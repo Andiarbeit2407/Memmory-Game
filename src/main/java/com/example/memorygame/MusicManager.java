@@ -15,6 +15,9 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Verwaltet die Musikfunktionalität, einschließlich Abspielen, Hinzufügen und Verwalten von Musikdateien.
+ */
 public class MusicManager {
 
     private MemoryGame mainApp;
@@ -23,11 +26,13 @@ public class MusicManager {
     private int currentSongIndex;
     private boolean isPlaying;
 
-    // UI components
     private Label currentSongLabel;
     private Button playPauseButton;
     private Slider volumeSlider;
 
+    /**
+     * Konstruktor. Initialisiert die Playlist und lädt Musikdateien.
+     */
     public MusicManager() {
         this.playlist = new ArrayList<>();
         this.currentSongIndex = 0;
@@ -36,6 +41,9 @@ public class MusicManager {
         loadMusicFromDirectory();
     }
 
+    /**
+     * Stellt sicher, dass das Musikverzeichnis existiert.
+     */
     private void ensureMusicDirectoryExists() {
         File musicDir = new File("music");
         if (!musicDir.exists()) {
@@ -43,6 +51,9 @@ public class MusicManager {
         }
     }
 
+    /**
+     * Lädt Musikdateien aus dem Musikverzeichnis in die Playlist.
+     */
     private void loadMusicFromDirectory() {
         playlist.clear();
         File musicDir = new File("music");
@@ -62,10 +73,18 @@ public class MusicManager {
         updateCurrentSongLabel();
     }
 
+    /**
+     * Setzt die Referenz auf die Hauptanwendung.
+     * @param mainApp Die Hauptanwendung.
+     */
     public void setMainApp(MemoryGame mainApp) {
         this.mainApp = mainApp;
     }
 
+    /**
+     * Erstellt das Musikverwaltungs-Panel.
+     * @return VBox mit UI-Elementen.
+     */
     public VBox createMusicPane() {
         VBox root = new VBox(20);
         root.setPadding(new Insets(50));
@@ -77,7 +96,6 @@ public class MusicManager {
         currentSongLabel = new Label(getCurrentSongName());
         currentSongLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: #ffffff;");
 
-        // Control buttons
         Button previousButton = new Button("Previous");
         previousButton.setOnAction(e -> playPrevious());
 
@@ -93,7 +111,6 @@ public class MusicManager {
         HBox controlsBox = new HBox(10, previousButton, playPauseButton, pauseButton, nextButton);
         controlsBox.setAlignment(Pos.CENTER);
 
-        // Volume control
         Label volumeLabel = new Label("Volume:");
         volumeLabel.setStyle("-fx-text-fill: #ffffff;");
 
@@ -105,12 +122,10 @@ public class MusicManager {
         VBox volumeBox = new VBox(5, volumeLabel, volumeSlider);
         volumeBox.setAlignment(Pos.CENTER);
 
-        // Musik hinzufügen Button
         Button addMusicButton = new Button("Musik hinzufügen");
         addMusicButton.setStyle("-fx-font-size: 16px; -fx-min-width: 150px;");
         addMusicButton.setOnAction(e -> handleAddMusic());
 
-        // Back button
         Button backButton = new Button("Back to Main Menu");
         backButton.setStyle("-fx-font-size: 16px; -fx-min-width: 150px;");
         backButton.setOnAction(e -> mainApp.switchToStartView());
@@ -120,6 +135,9 @@ public class MusicManager {
         return root;
     }
 
+    /**
+     * Öffnet einen Dialog zum Hinzufügen von Musikdateien.
+     */
     private void handleAddMusic() {
         Window window = mainApp.getPrimaryStage();
         FileChooser fileChooser = new FileChooser();
@@ -154,6 +172,9 @@ public class MusicManager {
         }
     }
 
+    /**
+     * Startet oder pausiert die Wiedergabe.
+     */
     public void togglePlayPause() {
         if (playlist.get(0).equals("No music files found")) {
             DialogUtils.showInformation("No Music", "No music files found in the music directory.");
@@ -167,6 +188,9 @@ public class MusicManager {
         }
     }
 
+    /**
+     * Startet die Wiedergabe des aktuellen Songs.
+     */
     private void play() {
         try {
             if (currentPlayer != null) {
@@ -189,6 +213,9 @@ public class MusicManager {
         }
     }
 
+    /**
+     * Pausiert die Wiedergabe.
+     */
     private void pause() {
         if (currentPlayer != null) {
             currentPlayer.pause();
@@ -197,6 +224,9 @@ public class MusicManager {
         playPauseButton.setText("Play");
     }
 
+    /**
+     * Spielt den nächsten Song in der Playlist ab.
+     */
     public void playNext() {
         if (playlist.size() > 1) {
             currentSongIndex = (currentSongIndex + 1) % playlist.size();
@@ -207,6 +237,9 @@ public class MusicManager {
         }
     }
 
+    /**
+     * Spielt den vorherigen Song in der Playlist ab.
+     */
     public void playPrevious() {
         if (playlist.size() > 1) {
             currentSongIndex = (currentSongIndex - 1 + playlist.size()) % playlist.size();
@@ -217,12 +250,20 @@ public class MusicManager {
         }
     }
 
+    /**
+     * Setzt die Lautstärke des Players.
+     * @param volume Lautstärke (0-100)
+     */
     private void setVolume(double volume) {
         if (currentPlayer != null) {
             currentPlayer.setVolume(volume / 100.0);
         }
     }
 
+    /**
+     * Gibt den Namen des aktuellen Songs zurück.
+     * @return Dateiname des aktuellen Songs.
+     */
     private String getCurrentSongName() {
         if (playlist.isEmpty()) {
             return "No songs available";
@@ -233,16 +274,21 @@ public class MusicManager {
             return fullPath;
         }
 
-        // Extract filename from path
         return new File(fullPath).getName();
     }
 
+    /**
+     * Aktualisiert das Label mit dem aktuellen Songnamen.
+     */
     private void updateCurrentSongLabel() {
         if (currentSongLabel != null) {
             currentSongLabel.setText(getCurrentSongName());
         }
     }
 
+    /**
+     * Bereinigt Ressourcen (z.B. beim Beenden der Anwendung).
+     */
     public void cleanup() {
         if (currentPlayer != null) {
             currentPlayer.stop();

@@ -1,6 +1,7 @@
 package com.example.memmorygame;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -240,22 +241,23 @@ public class MemoryGame extends Application {
         Button pauseButton = new Button("Pause");
         pauseButton.setOnAction(e -> showPauseMenu());
 
-        Button backToStartButton = new Button("Zurück zur Startseite");
+        // ÄNDERE Button-Beschriftung zu "Hauptmenü"
+        Button backToStartButton = new Button("Hauptmenü");
         backToStartButton.setOnAction(e -> {
-            if (showConfirmationDialog("Zurück zur Startseite", "Möchtest du das aktuelle Spiel beenden und zur Startseite zurückkehren?")) {
+            if (showConfirmationDialog("Hauptmenü", "Möchtest du das aktuelle Spiel beenden und zum Hauptmenü zurückkehren?")) {
                 primaryStage.setScene(startScene);
-                stopMusic(); // Musik stoppen, wenn man zur Startseite zurückkehrt
+                // stopMusic(); // ENTFERNT: Musik läuft weiter beim Wechsel ins Hauptmenü
             }
         });
 
-        controls = new HBox(20, scoreLabel, neuesSpielButton, pauseButton, backToStartButton); // Jetzt Zuweisung zur Instanzvariable
+        controls = new HBox(20, scoreLabel, neuesSpielButton, pauseButton, backToStartButton);
         controls.setAlignment(Pos.CENTER);
         controls.setPadding(new Insets(20));
         gameLayout.setBottom(controls);
 
         VBox gameRootVBox = new VBox();
         gameRootVBox.getChildren().add(gameLayout);
-        VBox.setVgrow(gameLayout, Priority.ALWAYS); // Erlaubt dem BorderPane, vertikal zu wachsen
+        VBox.setVgrow(gameLayout, Priority.ALWAYS);
 
         return gameRootVBox;
     }
@@ -467,9 +469,11 @@ public class MemoryGame extends Application {
 
         // Nur unaufgedeckte und nicht bereits geklickte Buttons bearbeiten
         if (aufgedeckt[row][col] || geklickterButton.getText().length() > 0) {
+            System.out.println("Button bereits aufgedeckt oder geklickt: " + row + ", " + col); // Debugging
             return;
         }
 
+        System.out.println("Button geklickt: " + row + ", " + col + " mit Wert: " + werte[row][col]); // Debugging
         geklickterButton.setText(werte[row][col]);
         geklickteButtons.add(geklickterButton);
 
@@ -480,9 +484,13 @@ public class MemoryGame extends Application {
                     buttons[i][j].setDisable(true);
                 }
             }
+            System.out.println("Zweites Feld aufgedeckt. Deaktiviere alle Buttons für Vergleich."); // Debugging
 
             versuche++;
             scoreUpdate();
+
+            // NEU: Debugging-Ausgabe hier einfügen
+            System.out.println("Aktuelle Versuche: " + versuche);
 
             PauseTransition pause = new PauseTransition(Duration.seconds(pauseTime));
             pause.setOnFinished(event -> {
@@ -494,44 +502,69 @@ public class MemoryGame extends Application {
 
                 if (werte[pos1[0]][pos1[1]].equals(werte[pos2[0]][pos2[1]])) {
                     // Paare gefunden
+                    System.out.println("Paar gefunden! Werte: " + werte[pos1[0]][pos1[1]] + " und " + werte[pos2[0]][pos2[1]]); // Debugging
                     ersterButton.setDisable(true);
                     zweiterButton.setDisable(true);
                     aufgedeckt[pos1[0]][pos1[1]] = true;
                     aufgedeckt[pos2[0]][pos2[1]] = true;
                     paare++;
+                    // NEU: Debugging-Ausgabe hier einfügen
+                    System.out.println("Paar gefunden! Aktuelle Paare: " + paare + " von insgesamt " + (gridSize * gridSize) / 2);
                 } else {
                     // Keine Paare
+                    System.out.println("Kein Paar. Werte: " + werte[pos1[0]][pos1[1]] + " und " + werte[pos2[0]][pos2[1]]); // Debugging
                     ersterButton.setText("");
                     zweiterButton.setText("");
                 }
 
                 geklickteButtons.clear();
 
-                // Buttons wieder aktivieren, die noch nicht aufgedeckt sind
-                for (int i = 0; i < gridSize; i++) {
-                    for (int j = 0; j < gridSize; j++) {
-                        if (!aufgedeckt[i][j]) {
-                            buttons[i][j].setDisable(false);
+                // *** START DER WICHTIGEN ÄNDERUNG HIER ***
+                // Gewinnbedingung an die Gittergröße anpassen
+                System.out.println("Überprüfe Gewinnbedingung: paare (" + paare + ") == Ziel (" + (gridSize * gridSize) / 2 + ")");
+
+                if (paare == (gridSize * gridSize) / 2) {
+                    // Nach dem Gewinn: Alle Buttons deaktivieren, damit kein weiterer Klick möglich ist
+                    for (int i = 0; i < gridSize; i++) {
+                        for (int j = 0; j < gridSize; j++) {
+                            buttons[i][j].setDisable(true);
                         }
                     }
-                }
+                    Platform.runLater(() -> {
+                        System.out.println("GEWINN ERKANNT!");
+                        savePlayerData(currentPlayerName, currentDifficulty); // Highscore speichern
+                        showHighscores(); // Highscores anzeigen
 
-                // Gewinnbedingung an die Gittergröße anpassen
-                if (paare == (gridSize * gridSize) / 2) {
-                    if (showCaptchaDialog()) { // CAPTCHA vor dem Speichern der Highscores
-                        showHighscores();
-                        if (showConfirmationDialog("Spiel beendet!", "Herzlichen Glückwunsch! Du hast alle Paare gefunden!\n" +
-                                "Möchtest du ein neues Spiel starten?")) {
+                        // Angepasster Glückwunsch-Dialog mit "Neues Spiel" und "Hauptmenü"
+                        Alert winAlert = new Alert(Alert.AlertType.CONFIRMATION);
+                        winAlert.setTitle("Spiel beendet!");
+                        winAlert.setHeaderText("Herzlichen Glückwunsch! Du hast alle Paare gefunden!");
+                        winAlert.setContentText("Möchtest du ein neues Spiel starten oder zum Hauptmenü zurückkehren?");
+
+                        ButtonType newGameButton = new ButtonType("Neues Spiel");
+                        ButtonType mainMenuButton = new ButtonType("Hauptmenü", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+                        winAlert.getButtonTypes().setAll(newGameButton, mainMenuButton);
+
+                        Optional<ButtonType> result = winAlert.showAndWait();
+                        if (result.isPresent() && result.get() == newGameButton) {
                             neuesSpiel();
                         } else {
                             primaryStage.setScene(startScene);
                         }
-                        savePlayerData(currentPlayerName, currentDifficulty); // Highscore speichern
-                    } else {
-                        showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Highscore wird nicht gespeichert.");
-                        neuesSpiel();
+                    });
+                } else {
+                    // Buttons wieder aktivieren, die noch nicht aufgedeckt sind (nur wenn noch nicht gewonnen)
+                    for (int i = 0; i < gridSize; i++) {
+                        for (int j = 0; j < gridSize; j++) {
+                            if (!aufgedeckt[i][j]) {
+                                buttons[i][j].setDisable(false);
+                            }
+                        }
                     }
+                    System.out.println("Buttons nach Vergleich reaktiviert."); // Debugging
                 }
+                // *** ENDE DER WICHTIGEN ÄNDERUNG HIER ***
             });
             pause.play();
         }
@@ -696,18 +729,18 @@ public class MemoryGame extends Application {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Spiel pausiert");
         alert.setHeaderText("Das Spiel ist pausiert.");
-        alert.setContentText("Möchtest du das Spiel fortsetzen oder beenden?");
+        alert.setContentText("Möchtest du das Spiel fortsetzen oder ins Hauptmenü zurückkehren?");
 
         ButtonType resumeButton = new ButtonType("Fortsetzen");
-        ButtonType exitButton = new ButtonType("Beenden", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType mainMenuButton = new ButtonType("Hauptmenü", ButtonBar.ButtonData.CANCEL_CLOSE);
 
-        alert.getButtonTypes().setAll(resumeButton, exitButton);
+        alert.getButtonTypes().setAll(resumeButton, mainMenuButton);
 
         Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == exitButton) {
-            if (showConfirmationDialog("Beenden", "Möchtest du das Spiel wirklich beenden?")) {
-                primaryStage.setScene(startScene); // Zurück zur Startseite
-                stopMusic(); // Musik stoppen, wenn man zur Startseite zurückkehrt
+        if (result.isPresent() && result.get() == mainMenuButton) {
+            if (showConfirmationDialog("Hauptmenü", "Möchtest du das Spiel wirklich beenden und ins Hauptmenü zurückkehren?")) {
+                primaryStage.setScene(startScene);
+                // stopMusic(); // ENTFERNT: Musik läuft weiter beim Wechsel ins Hauptmenü
             }
         }
     }

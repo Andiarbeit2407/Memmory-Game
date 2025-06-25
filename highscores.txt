@@ -1,4 +1,1 @@
-    Andi;Einfach;22
-Andi;Einfach;19
-Andi;Einfach;20
-Andi;Einfach;22
+test,Einfach,57,19

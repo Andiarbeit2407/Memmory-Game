@@ -71,6 +71,8 @@ public class MemoryGame extends Application {
         gameScene = new Scene(gamePaneRoot); // Keine feste Größe mehr hier, wird dynamisch angepasst
 
         // Wiedergabeliste laden
+        // Die Playlist sollte hier geladen werden, bevor die primaryStage.setScene() aufgerufen wird,
+        // falls die Musik beim Start automatisch spielen soll oder der Musikmanager direkt aufgerufen wird.
         loadPlaylist();
 
         // --- Dark Mode CSS anwenden ---
@@ -78,14 +80,36 @@ public class MemoryGame extends Application {
         startScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
         gameScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
 
-        // --- Musik automatisch abspielen ---
-//        if (!playlist.isEmpty()) {
-//            playSong(playlist.get(0));
-//            currentSongIndex = 0; // Sicherstellen, dass der Index des aktuell spielenden Songs gesetzt ist
-//        }
-
         primaryStage.setScene(startScene);
         primaryStage.setTitle("Memory Game");
+
+        // NEUE FUNKTIONALITÄT: Event-Handler für den Schließen-Knopf des Fensters
+        primaryStage.setOnCloseRequest(event -> {
+            // Verhindert das sofortige Schließen des Fensters
+            event.consume();
+
+            // Optional: Zusätzlicher Bestätigungsdialog vor dem CAPTCHA
+            if (showConfirmationDialog("Anwendung beenden", "Möchten Sie die Anwendung wirklich beenden? Sie müssen ein CAPTCHA lösen.")) {
+                if (showCaptchaDialog()) {
+                    // CAPTCHA korrekt gelöst und Bestätigung gegeben
+                    // Musik stoppen, wenn die Anwendung geschlossen wird
+                    if (musicPlayer != null) {
+                        musicPlayer.stop();
+                        musicPlayer.dispose(); // Wichtig: Ressourcen freigeben
+                    }
+                    primaryStage.close(); // Fenster schließen
+                    // Optional: System.exit(0); für sauberen Exit, wenn nicht alle Threads selbst beendet werden
+                    // (Oft nicht nötig bei sauberer JavaFX Applikation)
+                } else {
+                    // CAPTCHA falsch
+                    showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Die Anwendung bleibt geöffnet.");
+                }
+            } else {
+                // Benutzer hat "Abbrechen" im Bestätigungsdialog gewählt
+                System.out.println("Schließen abgebrochen."); // Nur für Debugging
+            }
+        });
+
         primaryStage.show();
     }
 
@@ -121,9 +145,22 @@ public class MemoryGame extends Application {
 
         Button exitButton = new Button("Beenden");
         exitButton.setOnAction(e -> {
-            if (showConfirmationDialog("Beenden", "Möchtest du das Spiel wirklich beenden?")) {
-                primaryStage.close();
+            // ANGEPASSTE LOGIK FÜR DEN BEENDEN-BUTTON
+            if (showConfirmationDialog("Anwendung beenden", "Möchtest du die Anwendung wirklich beenden? Du musst ein CAPTCHA lösen.")) {
+                if (showCaptchaDialog()) {
+                    // CAPTCHA korrekt gelöst
+                    // Musik stoppen, wenn die Anwendung geschlossen wird
+                    if (musicPlayer != null) {
+                        musicPlayer.stop();
+                        musicPlayer.dispose();
+                    }
+                    primaryStage.close(); // Anwendung schließen
+                } else {
+                    // CAPTCHA falsch
+                    showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Die Anwendung bleibt geöffnet.");
+                }
             }
+            // Wenn der Benutzer den ersten Bestätigungsdialog abbricht, passiert nichts.
         });
 
         // Musik Manager Button
@@ -140,6 +177,7 @@ public class MemoryGame extends Application {
 
         // Initialisiere ein leeres Grid. Es wird später durch buildGameGrid() ersetzt.
         gameGrid = new GridPane();
+        gameGrid.setAlignment(Pos.CENTER);
         gameLayout.setCenter(gameGrid);
 
         scoreLabel = new Label("Versuche: 0");

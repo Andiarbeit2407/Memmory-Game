@@ -2,8 +2,10 @@ package com.example.memmorygame;
 
 import javafx.application.Application;
 import javafx.scene.Scene;
+import javafx.scene.control.TextInputDialog;
 import javafx.stage.Stage;
 import javafx.scene.input.KeyCode;
+import java.util.Random;
 
 public class MemoryGame extends Application {
 
@@ -92,15 +94,105 @@ public class MemoryGame extends Application {
             event.consume();
             if (DialogUtils.showConfirmationDialog("Application Exit",
                     "Do you really want to exit the application?")) {
-                if (musicManager != null) {
-                    musicManager.cleanup();
+                // Captcha-Dialog
+                if (showCaptchaDialog()) {
+                    if (musicManager != null) {
+                        musicManager.cleanup();
+                    }
+                    if (gameController != null) {
+                        gameController.cleanup();
+                    }
+                    primaryStage.close();
                 }
-                if (gameController != null) {
-                    gameController.cleanup();
-                }
-                primaryStage.close();
             }
         });
+    }
+
+    /**
+     * Zeigt ein schwereres Captcha-Dialog (Rechenaufgabe oder Buchstabenfolge).
+     * @return true, wenn die Aufgabe korrekt gelöst wurde, sonst false.
+     */
+    private boolean showCaptchaDialog() {
+        Random rand = new Random();
+        boolean useMath = rand.nextBoolean();
+
+        if (useMath) {
+            int a = rand.nextInt(90) + 10; // 10-99
+            int b = rand.nextInt(90) + 10; // 10-99
+            char[] ops = {'+', '-', '*'};
+            char op = ops[rand.nextInt(ops.length)];
+            int result;
+            String aufgabe;
+
+            switch (op) {
+                case '+':
+                    result = a + b;
+                    aufgabe = a + " + " + b;
+                    break;
+                case '-':
+                    result = a - b;
+                    aufgabe = a + " - " + b;
+                    break;
+                case '*':
+                    result = a * b;
+                    aufgabe = a + " * " + b;
+                    break;
+                default:
+                    result = a + b;
+                    aufgabe = a + " + " + b;
+            }
+
+            TextInputDialog captchaDialog = new TextInputDialog();
+            captchaDialog.setTitle("Captcha");
+            captchaDialog.setHeaderText("Bestätige, dass du kein Bot bist!");
+            captchaDialog.setContentText("Was ist " + aufgabe + "?");
+
+            while (true) {
+                var opt = captchaDialog.showAndWait();
+                if (opt.isEmpty()) {
+                    // Abbrechen gedrückt
+                    return false;
+                }
+                try {
+                    int input = Integer.parseInt(opt.get().trim());
+                    if (input == result) {
+                        return true;
+                    } else {
+                        captchaDialog.setHeaderText("Falsch! Versuche es erneut.\nBestätige, dass du kein Bot bist!");
+                    }
+                } catch (NumberFormatException e) {
+                    captchaDialog.setHeaderText("Bitte gib eine Zahl ein!\nBestätige, dass du kein Bot bist!");
+                }
+            }
+        } else {
+            // Buchstaben-Captcha
+            int length = rand.nextInt(3) + 4; // 4-6 Zeichen
+            String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < length; i++) {
+                sb.append(chars.charAt(rand.nextInt(chars.length())));
+            }
+            String captchaText = sb.toString();
+
+            TextInputDialog captchaDialog = new TextInputDialog();
+            captchaDialog.setTitle("Captcha");
+            captchaDialog.setHeaderText("Bitte gib die folgende Zeichenfolge ein, um zu bestätigen, dass du kein Bot bist!");
+            captchaDialog.setContentText("Captcha: " + captchaText);
+
+            while (true) {
+                var opt = captchaDialog.showAndWait();
+                if (opt.isEmpty()) {
+                    // Abbrechen gedrückt
+                    return false;
+                }
+                String input = opt.get().trim();
+                if (input.equals(captchaText)) {
+                    return true;
+                } else {
+                    captchaDialog.setHeaderText("Falsch! Versuche es erneut.\nBitte gib die folgende Zeichenfolge ein, um zu bestätigen, dass du kein Bot bist!");
+                }
+            }
+        }
     }
 
     // Scene switching methods

@@ -7,7 +7,11 @@ import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,32 +32,38 @@ public class MusicManager {
         this.playlist = new ArrayList<>();
         this.currentSongIndex = 0;
         this.isPlaying = false;
-        loadDefaultPlaylist();
+        ensureMusicDirectoryExists();
+        loadMusicFromDirectory();
+    }
+
+    private void ensureMusicDirectoryExists() {
+        File musicDir = new File("music");
+        if (!musicDir.exists()) {
+            musicDir.mkdirs();
+        }
+    }
+
+    private void loadMusicFromDirectory() {
+        playlist.clear();
+        File musicDir = new File("music");
+        File[] files = musicDir.listFiles((dir, name) -> {
+            String lower = name.toLowerCase();
+            return lower.endsWith(".mp3") || lower.endsWith(".wav");
+        });
+        if (files != null && files.length > 0) {
+            for (File file : files) {
+                playlist.add(file.getPath());
+            }
+        }
+        if (playlist.isEmpty()) {
+            playlist.add("No music files found");
+        }
+        currentSongIndex = 0;
+        updateCurrentSongLabel();
     }
 
     public void setMainApp(MemoryGame mainApp) {
         this.mainApp = mainApp;
-    }
-
-    private void loadDefaultPlaylist() {
-        // Add some default music files if they exist
-        String[] defaultSongs = {
-                "music/background1.mp3",
-                "music/background2.mp3",
-                "music/background3.mp3"
-        };
-
-        for (String song : defaultSongs) {
-            File file = new File(song);
-            if (file.exists()) {
-                playlist.add(song);
-            }
-        }
-
-        // If no music files found, add placeholder
-        if (playlist.isEmpty()) {
-            playlist.add("No music files found");
-        }
     }
 
     public VBox createMusicPane() {
@@ -74,10 +84,13 @@ public class MusicManager {
         playPauseButton = new Button(isPlaying ? "Pause" : "Play");
         playPauseButton.setOnAction(e -> togglePlayPause());
 
+        Button pauseButton = new Button("Pause");
+        pauseButton.setOnAction(e -> pause());
+
         Button nextButton = new Button("Next");
         nextButton.setOnAction(e -> playNext());
 
-        HBox controlsBox = new HBox(10, previousButton, playPauseButton, nextButton);
+        HBox controlsBox = new HBox(10, previousButton, playPauseButton, pauseButton, nextButton);
         controlsBox.setAlignment(Pos.CENTER);
 
         // Volume control
@@ -92,14 +105,53 @@ public class MusicManager {
         VBox volumeBox = new VBox(5, volumeLabel, volumeSlider);
         volumeBox.setAlignment(Pos.CENTER);
 
+        // Musik hinzufügen Button
+        Button addMusicButton = new Button("Musik hinzufügen");
+        addMusicButton.setStyle("-fx-font-size: 16px; -fx-min-width: 150px;");
+        addMusicButton.setOnAction(e -> handleAddMusic());
+
         // Back button
         Button backButton = new Button("Back to Main Menu");
         backButton.setStyle("-fx-font-size: 16px; -fx-min-width: 150px;");
         backButton.setOnAction(e -> mainApp.switchToStartView());
 
-        root.getChildren().addAll(titleLabel, currentSongLabel, controlsBox, volumeBox, backButton);
+        root.getChildren().addAll(titleLabel, currentSongLabel, controlsBox, volumeBox, addMusicButton, backButton);
 
         return root;
+    }
+
+    private void handleAddMusic() {
+        Window window = mainApp.getPrimaryStage();
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Audio-Dateien auswählen");
+        fileChooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("Audio Dateien (*.mp3, *.wav)", "*.mp3", "*.wav"),
+            new FileChooser.ExtensionFilter("MP3 Dateien", "*.mp3"),
+            new FileChooser.ExtensionFilter("WAV Dateien", "*.wav")
+        );
+        List<File> selectedFiles = fileChooser.showOpenMultipleDialog(window);
+
+        if (selectedFiles != null && !selectedFiles.isEmpty()) {
+            File musicDir = new File("music");
+            int added = 0;
+            for (File src : selectedFiles) {
+                File dest = new File(musicDir, src.getName());
+                try {
+                    if (!dest.exists()) {
+                        Files.copy(src.toPath(), dest.toPath());
+                        added++;
+                    }
+                } catch (IOException ex) {
+                    DialogUtils.showError("Fehler beim Hinzufügen", "Datei konnte nicht kopiert werden: " + src.getName());
+                }
+            }
+            if (added > 0) {
+                DialogUtils.showInformation("Musik hinzugefügt", added + " Datei(en) wurden hinzugefügt.");
+                loadMusicFromDirectory();
+            } else {
+                DialogUtils.showInformation("Keine neuen Dateien", "Es wurden keine neuen Musikdateien hinzugefügt.");
+            }
+        }
     }
 
     public void togglePlayPause() {

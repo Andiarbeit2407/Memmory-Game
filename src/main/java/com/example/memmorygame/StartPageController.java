@@ -99,8 +99,23 @@ public class StartPageController {
     public void handleExit() {
         if (DialogUtils.showConfirmationDialog("Exit Application",
                 "Do you really want to exit the game?")) {
-            System.exit(0);
+            // Captcha-Abfrage vor dem Beenden
+            if (mainApp != null && mainApp.getClass().getSimpleName().equals("MemoryGame")) {
+                try {
+                    // Reflection, um showCaptchaDialog aufzurufen
+                    java.lang.reflect.Method captchaMethod = mainApp.getClass().getDeclaredMethod("showCaptchaDialog");
+                    captchaMethod.setAccessible(true);
+                    boolean captchaOk = (boolean) captchaMethod.invoke(mainApp);
+                    if (captchaOk) {
+                        System.exit(0);
+                    }
+                } catch (Exception e) {
+                    // Falls etwas schiefgeht, verlasse das Programm nicht
+                    DialogUtils.showError("Fehler", "Captcha konnte nicht angezeigt werden.");
+                }
+            } else {
+                System.exit(0);
+            }
         }
     }
 }
-

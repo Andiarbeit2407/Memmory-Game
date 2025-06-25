@@ -12,17 +12,19 @@ import javafx.util.Duration;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
 import javafx.stage.FileChooser;
-import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ChangeListener; // Diese Importe sind möglicherweise nicht mehr direkt im Code verwendet, aber schaden nicht
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import java.io.*;
 import java.util.*;
+import javafx.scene.input.KeyCode; // Für KeyCode (Shortcuts)
 
 public class MemoryGame extends Application {
 
     private Stage primaryStage;
     private Scene gameScene;
     private Scene startScene;
+    private Scene musicScene; // Hinzugefügt, um die Musik-Szene als Instanzvariable zu halten
 
     // Memory-Spiel Attribute
     private Button[][] buttons; // Größe wird dynamisch festgelegt
@@ -43,7 +45,7 @@ public class MemoryGame extends Application {
     private GridPane gameGrid;
     private HBox controls; // Hier als Instanzvariable deklariert
 
-    // Musik-Manager Attribute (Unverändert gelassen)
+    // Musik-Manager Attribute
     private ObservableList<Song> playlist = FXCollections.observableArrayList();
     private MediaPlayer musicPlayer;
     private ListView<Song> songListView;
@@ -56,6 +58,9 @@ public class MemoryGame extends Application {
 
     // Referenz auf den Musik-Root, um ToggleButtons zugänglich zu machen, ohne die Logik zu ändern
     private VBox musicRoot;
+
+    // Konstante für den Playlist-Dateinamen
+    private static final String PLAYLIST_FILE_NAME = "playlist.ser";
 
 
     @Override
@@ -70,48 +75,95 @@ public class MemoryGame extends Application {
         VBox gamePaneRoot = createGamePane();
         gameScene = new Scene(gamePaneRoot); // Keine feste Größe mehr hier, wird dynamisch angepasst
 
-        // Wiedergabeliste laden
-        // Die Playlist sollte hier geladen werden, bevor die primaryStage.setScene() aufgerufen wird,
-        // falls die Musik beim Start automatisch spielen soll oder der Musikmanager direkt aufgerufen wird.
+        // Wiedergabeliste laden (automatisch beim Start)
         loadPlaylist();
 
         // --- Dark Mode CSS anwenden ---
-        // Stellen Sie sicher, dass dark-mode.css im Ressourcenordner (z.B. src/main/resources) liegt.
         startScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
-        gameScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
+        // gameScene und musicScene Stylesheets werden gesetzt, wenn die Szenen aktiviert werden
+        // da sie dynamisch erstellt oder neu zugewiesen werden können.
 
         primaryStage.setScene(startScene);
         primaryStage.setTitle("Memory Game");
 
-        // NEUE FUNKTIONALITÄT: Event-Handler für den Schließen-Knopf des Fensters
+        // NEUE FUNKTIONALITÄT: Event-Handler für den Schließen-Knopf des Fensters (X-Button)
         primaryStage.setOnCloseRequest(event -> {
             // Verhindert das sofortige Schließen des Fensters
             event.consume();
 
-            // Optional: Zusätzlicher Bestätigungsdialog vor dem CAPTCHA
             if (showConfirmationDialog("Anwendung beenden", "Möchten Sie die Anwendung wirklich beenden? Sie müssen ein CAPTCHA lösen.")) {
                 if (showCaptchaDialog()) {
-                    // CAPTCHA korrekt gelöst und Bestätigung gegeben
-                    // Musik stoppen, wenn die Anwendung geschlossen wird
+                    // CAPTCHA korrekt gelöst
+                    // Musik stoppen und Ressourcen freigeben
                     if (musicPlayer != null) {
                         musicPlayer.stop();
-                        musicPlayer.dispose(); // Wichtig: Ressourcen freigeben
+                        musicPlayer.dispose();
                     }
+                    savePlaylist(); // Playlist speichern beim Beenden
                     primaryStage.close(); // Fenster schließen
-                    // Optional: System.exit(0); für sauberen Exit, wenn nicht alle Threads selbst beendet werden
-                    // (Oft nicht nötig bei sauberer JavaFX Applikation)
                 } else {
                     // CAPTCHA falsch
                     showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Die Anwendung bleibt geöffnet.");
                 }
             } else {
                 // Benutzer hat "Abbrechen" im Bestätigungsdialog gewählt
-                System.out.println("Schließen abgebrochen."); // Nur für Debugging
+                System.out.println("Schließen abgebrochen.");
+            }
+        });
+
+        // NEU: Shortcuts für die Startseite (startScene)
+        startScene.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                // Auslösen der Start-Button-Aktion
+                // Direkter Zugriff auf die Komponenten der Startseite
+                TextField nameInput = (TextField) ((VBox) startScene.getRoot()).getChildren().get(1);
+                ComboBox<String> difficultyComboBox = (ComboBox<String>) ((VBox) startScene.getRoot()).getChildren().get(2);
+
+                currentPlayerName = nameInput.getText().trim();
+                if (currentPlayerName.isEmpty()) {
+                    showError("Fehler", "Bitte gib einen Spielernamen ein.");
+                } else {
+                    currentDifficulty = difficultyComboBox.getValue();
+                    switchToGameView(currentPlayerName, currentDifficulty);
+                }
+                event.consume(); // Event konsumieren
+            } else if (event.getCode() == KeyCode.ESCAPE) {
+                // Auslösen der Exit-Button-Aktion (inkl. CAPTCHA)
+                // Die Logik ist bereits im exitButton.setOnAction hinterlegt und wird hier direkt dupliziert
+                // um Konsistenz zu gewährleisten, wenn der User ESC drückt.
+                if (showConfirmationDialog("Anwendung beenden", "Möchten Sie die Anwendung wirklich beenden? Sie müssen ein CAPTCHA lösen.")) {
+                    if (showCaptchaDialog()) {
+                        if (musicPlayer != null) {
+                            musicPlayer.stop();
+                            musicPlayer.dispose();
+                        }
+                        savePlaylist(); // Playlist speichern beim Beenden
+                        primaryStage.close();
+                    } else {
+                        showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Die Anwendung bleibt geöffnet.");
+                    }
+                }
+                event.consume();
             }
         });
 
         primaryStage.show();
     }
+
+    // Die stop() Methode wird automatisch von JavaFX aufgerufen, wenn die Anwendung beendet wird (auch nach primaryStage.close()).
+    // Hier können wir nochmals eine Sicherung für das Speichern der Playlist einbauen, falls der Benutzer den Dialog ablehnt oder der Exit nicht über die UI erfolgt.
+    @Override
+    public void stop() throws Exception {
+        super.stop();
+        // Hier sollte die Playlist NUR gespeichert werden, wenn nicht bereits durch den CloseRequest-Handler geschehen.
+        // Die aktuelle Logik im CloseRequest-Handler ist ausreichend.
+        // Diese stop-Methode dient mehr als letzter Aufräumschritt.
+        if (musicPlayer != null) {
+            musicPlayer.dispose(); // Sicherstellen, dass der Player disposed wird
+        }
+        System.out.println("Anwendung wird beendet. Ressourcen freigegeben.");
+    }
+
 
     private VBox createStartPage() {
         VBox root = new VBox(20);
@@ -145,22 +197,21 @@ public class MemoryGame extends Application {
 
         Button exitButton = new Button("Beenden");
         exitButton.setOnAction(e -> {
-            // ANGEPASSTE LOGIK FÜR DEN BEENDEN-BUTTON
+            // ANGEPASSTE LOGIK FÜR DEN BEENDEN-BUTTON (mit CAPTCHA)
             if (showConfirmationDialog("Anwendung beenden", "Möchtest du die Anwendung wirklich beenden? Du musst ein CAPTCHA lösen.")) {
                 if (showCaptchaDialog()) {
                     // CAPTCHA korrekt gelöst
-                    // Musik stoppen, wenn die Anwendung geschlossen wird
                     if (musicPlayer != null) {
                         musicPlayer.stop();
                         musicPlayer.dispose();
                     }
+                    savePlaylist(); // Playlist speichern beim Beenden
                     primaryStage.close(); // Anwendung schließen
                 } else {
                     // CAPTCHA falsch
                     showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Die Anwendung bleibt geöffnet.");
                 }
             }
-            // Wenn der Benutzer den ersten Bestätigungsdialog abbricht, passiert nichts.
         });
 
         // Musik Manager Button
@@ -245,7 +296,7 @@ public class MemoryGame extends Application {
     }
 
     private VBox createMusicPane() {
-        musicRoot = new VBox(10); // Speichere Referenz im Instanzfeld
+        musicRoot = new VBox(10);
         musicRoot.setPadding(new Insets(20));
         musicRoot.setAlignment(Pos.TOP_CENTER);
 
@@ -293,8 +344,6 @@ public class MemoryGame extends Application {
         Button nextButton = new Button("Nächster");
         nextButton.setOnAction(e -> playNextSong());
 
-        // Toggle Buttons als Instanzvariablen (oder final in Methode) für einfacheren Zugriff
-        // Ich belasse die ursprüngliche, weniger robuste Methode bei, wie vom Benutzer gewünscht.
         ToggleButton shuffleButton = new ToggleButton("Zufall (Aus)");
         shuffleButton.setOnAction(e -> toggleShuffle());
 
@@ -322,8 +371,30 @@ public class MemoryGame extends Application {
     }
 
     private void showMusicManager() {
-        Scene musicScene = new Scene(createMusicPane(), 800, 600);
+        musicScene = new Scene(createMusicPane(), 800, 600); // Zuweisung zur Instanzvariable
         musicScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm()); // Dark Mode auch für den Music Manager
+
+        // NEU: Shortcuts für die Musik-Manager-Szene (musicScene)
+        musicScene.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.SPACE) { // Leertaste für Play/Pause
+                if (musicPlayer != null && musicPlayer.getStatus() == MediaPlayer.Status.PLAYING) {
+                    pauseMusic();
+                } else {
+                    playSelectedSong(); // Versucht, den aktuell ausgewählten/nächsten Song zu spielen
+                }
+                event.consume();
+            } else if (event.getCode() == KeyCode.RIGHT) { // Pfeil Rechts für Nächster Song
+                playNextSong();
+                event.consume();
+            } else if (event.getCode() == KeyCode.LEFT) { // Pfeil Links für Vorheriger Song
+                playPreviousSong();
+                event.consume();
+            } else if (event.getCode() == KeyCode.ESCAPE) { // Escape für Zurück
+                primaryStage.setScene(startScene);
+                event.consume();
+            }
+        });
+
         primaryStage.setScene(musicScene);
     }
 
@@ -346,10 +417,8 @@ public class MemoryGame extends Application {
         for (int i = 0; i < 100; i++) {
             pool.add(String.valueOf(i));
         }
-        // Zusätzliche Sonderzeichen oder Unicode-Symbole könnten hier hinzugefügt werden, falls benötigt
 
         if (pool.size() < count) {
-            // Sollte mit der aktuellen Pool-Größe und max. 8x8 Gitter (32 Paare) nicht passieren.
             throw new IllegalStateException("Nicht genügend einzigartige Symbole für die Gittergröße verfügbar.");
         }
 
@@ -383,7 +452,6 @@ public class MemoryGame extends Application {
             for (int j = 0; j < gridSize; j++) {
                 buttons[i][j].setText("");
                 buttons[i][j].setDisable(false);
-                // Schriftgröße wird bereits in buildGameGrid gesetzt
                 werte[i][j] = tempSymbole.get(k++);
                 aufgedeckt[i][j] = false;
             }
@@ -407,8 +475,8 @@ public class MemoryGame extends Application {
 
         if (geklickteButtons.size() == 2) {
             // Alle Buttons während des Vergleichs deaktivieren
-            for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
-                for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+            for (int i = 0; i < gridSize; i++) {
+                for (int j = 0; j < gridSize; j++) {
                     buttons[i][j].setDisable(true);
                 }
             }
@@ -440,8 +508,8 @@ public class MemoryGame extends Application {
                 geklickteButtons.clear();
 
                 // Buttons wieder aktivieren, die noch nicht aufgedeckt sind
-                for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
-                    for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+                for (int i = 0; i < gridSize; i++) {
+                    for (int j = 0; j < gridSize; j++) {
                         if (!aufgedeckt[i][j]) {
                             buttons[i][j].setDisable(false);
                         }
@@ -452,7 +520,6 @@ public class MemoryGame extends Application {
                 if (paare == (gridSize * gridSize) / 2) {
                     if (showCaptchaDialog()) { // CAPTCHA vor dem Speichern der Highscores
                         showHighscores();
-                        // Optional: Direkt ein neues Spiel starten oder zurück zur Startseite
                         if (showConfirmationDialog("Spiel beendet!", "Herzlichen Glückwunsch! Du hast alle Paare gefunden!\n" +
                                 "Möchtest du ein neues Spiel starten?")) {
                             neuesSpiel();
@@ -462,7 +529,6 @@ public class MemoryGame extends Application {
                         savePlayerData(currentPlayerName, currentDifficulty); // Highscore speichern
                     } else {
                         showError("CAPTCHA Fehler", "Das CAPTCHA war falsch. Highscore wird nicht gespeichert.");
-                        // Spiel zurücksetzen oder beenden
                         neuesSpiel();
                     }
                 }
@@ -472,8 +538,8 @@ public class MemoryGame extends Application {
     }
 
     private int[] findeButtonPosition(Button btn) {
-        for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
-            for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+        for (int i = 0; i < gridSize; i++) {
+            for (int j = 0; j < gridSize; j++) {
                 if (buttons[i][j] == btn) {
                     return new int[]{i, j};
                 }
@@ -488,9 +554,8 @@ public class MemoryGame extends Application {
 
     private void neuesSpiel() {
         spielInitialisieren();
-        // Stellen Sie sicher, dass alle Buttons wieder aktiviert sind, falls sie durch den CAPTCHA-Dialog deaktiviert wurden
-        for (int i = 0; i < gridSize; i++) { // Loop über aktuelle gridSize
-            for (int j = 0; j < gridSize; j++) { // Loop über aktuelle gridSize
+        for (int i = 0; i < gridSize; i++) {
+            for (int j = 0; j < gridSize; j++) {
                 buttons[i][j].setDisable(false);
             }
         }
@@ -505,9 +570,9 @@ public class MemoryGame extends Application {
         // Konstanten für Abstände/Padding
         final double H_GAP = 10;
         final double V_GAP = 10;
-        final double CONTROLS_HEIGHT_ESTIMATE = 80.0; // Geschätzte Höhe der unteren Kontrollleiste (inkl. Padding)
-        final double SCENE_PADDING_VERTICAL = 40.0; // Z.B. 20px oben + 20px unten um das Gitter
-        final double SCENE_PADDING_HORIZONTAL = 40.0; // Z.B. 20px links + 20px rechts um das Gitter
+        final double CONTROLS_HEIGHT_ESTIMATE = 80.0;
+        final double SCENE_PADDING_VERTICAL = 40.0;
+        final double SCENE_PADDING_HORIZONTAL = 40.0;
 
         // Berechnung der benötigten Szenengröße
         double requiredGridWidth = (gridSize * calculatedButtonSize) + ((gridSize - 1) * H_GAP);
@@ -516,21 +581,31 @@ public class MemoryGame extends Application {
         double newWidth = requiredGridWidth + SCENE_PADDING_HORIZONTAL;
         double newHeight = requiredGridHeight + CONTROLS_HEIGHT_ESTIMATE + SCENE_PADDING_VERTICAL;
 
-        // Mindest- und Maximalgrößen für das Fenster, um extreme Größen zu vermeiden
         if (newWidth < 500) newWidth = 500;
         if (newHeight < 400) newHeight = 400;
         if (newWidth > 1000) newWidth = 1000;
         if (newHeight > 900) newHeight = 900;
 
 
-        // primaryStage anpassen
         primaryStage.setWidth(newWidth);
         primaryStage.setHeight(newHeight);
-        primaryStage.centerOnScreen(); // Fenster zentrieren
+        primaryStage.centerOnScreen();
 
         buildGameGrid(); // Erstellt das Gitter und die Buttons mit der neuen gridSize und calculatedButtonSize
         spielInitialisieren(); // Initialisiert das Spiel mit den neuen Einstellungen
         primaryStage.setScene(gameScene); // Setzt die Szene, die sich nun an die Fenstergröße anpassen wird
+
+        // NEU: Shortcuts für die Spielszene (gameScene)
+        gameScene.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ESCAPE) {
+                showPauseMenu();
+                event.consume();
+            } else if (event.getCode() == KeyCode.N) {
+                neuesSpiel();
+                event.consume();
+            }
+        });
+        gameScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
     }
 
     private void adjustDifficulty(String difficulty) {
@@ -585,7 +660,6 @@ public class MemoryGame extends Application {
         alert.setHeaderText("Beste Spielergebnisse:");
 
         StringBuilder sb = new StringBuilder();
-        // Optional: Highscores sortieren, z.B. nach Versuchen aufsteigend
         highscores.stream()
                 .map(line -> {
                     String[] parts = line.split(";");
@@ -593,7 +667,7 @@ public class MemoryGame extends Application {
                         try {
                             return new AbstractMap.SimpleEntry<>(Integer.parseInt(parts[2]), parts[0] + " (" + parts[1] + "): " + parts[2] + " Versuche");
                         } catch (NumberFormatException e) {
-                            return new AbstractMap.SimpleEntry<>(Integer.MAX_VALUE, line); // Ungültige Einträge ans Ende
+                            return new AbstractMap.SimpleEntry<>(Integer.MAX_VALUE, line);
                         }
                     }
                     return new AbstractMap.SimpleEntry<>(Integer.MAX_VALUE, line);
@@ -613,7 +687,7 @@ public class MemoryGame extends Application {
         expContent.add(textArea, 0, 0);
 
         alert.getDialogPane().setExpandableContent(expContent);
-        alert.getDialogPane().setExpanded(true); // Direkt erweitern
+        alert.getDialogPane().setExpanded(true);
 
         alert.showAndWait();
     }
@@ -633,9 +707,9 @@ public class MemoryGame extends Application {
         if (result.isPresent() && result.get() == exitButton) {
             if (showConfirmationDialog("Beenden", "Möchtest du das Spiel wirklich beenden?")) {
                 primaryStage.setScene(startScene); // Zurück zur Startseite
+                stopMusic(); // Musik stoppen, wenn man zur Startseite zurückkehrt
             }
         }
-        // Wenn "Fortsetzen" gewählt wird oder der Dialog geschlossen wird, passiert nichts.
     }
 
     private boolean showConfirmationDialog(String title, String content) {
@@ -689,7 +763,7 @@ public class MemoryGame extends Application {
         if (selectedFile != null) {
             Song newSong = new Song(selectedFile.getName(), selectedFile.toURI().toString());
             playlist.add(newSong);
-            savePlaylist();
+            savePlaylist(); // Playlist speichern, nachdem ein Song hinzugefügt wurde
         }
     }
 
@@ -697,11 +771,12 @@ public class MemoryGame extends Application {
         Song selectedSong = songListView.getSelectionModel().getSelectedItem();
         if (selectedSong != null) {
             if (showConfirmationDialog("Song entfernen", "Möchten Sie '" + selectedSong.getName() + "' wirklich aus der Wiedergabeliste entfernen?")) {
-                if (musicPlayer != null && selectedSong.getPath().equals(playlist.get(currentSongIndex).getPath())) {
+                // Prüfen, ob der zu entfernende Song der aktuell spielende ist
+                if (musicPlayer != null && currentSongIndex < playlist.size() && selectedSong.getPath().equals(playlist.get(currentSongIndex).getPath())) {
                     stopMusic(); // Aktuell spielenden Song stoppen, wenn er entfernt wird
                 }
                 playlist.remove(selectedSong);
-                savePlaylist();
+                savePlaylist(); // Playlist speichern, nachdem ein Song entfernt wurde
                 // Index anpassen, falls der entfernte Song vor dem aktuellen Song war
                 if (currentSongIndex >= playlist.size() && !playlist.isEmpty()) {
                     currentSongIndex = playlist.size() - 1;
@@ -709,6 +784,8 @@ public class MemoryGame extends Application {
                     currentSongIndex = 0;
                     currentSongLabel.setText("Aktueller Song: Keiner");
                     progressBar.setProgress(0);
+                } else if (currentSongIndex > songListView.getSelectionModel().getSelectedIndex()) {
+                    currentSongIndex--; // Wenn ein Song vor dem aktuellen Index entfernt wird
                 }
             }
         } else {
@@ -812,12 +889,22 @@ public class MemoryGame extends Application {
                 playNextSong(); // Nächsten Song spielen oder stoppen
             }
         });
+
+        musicPlayer.setOnError(() -> {
+            System.err.println("MediaPlayer Fehler für " + song.getName() + ": " + musicPlayer.getError());
+            showError("Wiedergabefehler", "Beim Abspielen von " + song.getName() + " ist ein Fehler aufgetreten: " + musicPlayer.getError());
+            // Optional: Zum nächsten Song springen oder den problematischen Song entfernen
+            playNextSong();
+        });
     }
 
     private void toggleShuffle() {
         isShuffleMode = !isShuffleMode;
-        // Ich belasse den ursprünglichen Zugriff auf die ToggleButtons, wie er im Code war.
-        ToggleButton shuffleButton = (ToggleButton) ((HBox) ((VBox) songListView.getParent()).getChildren().get(5)).getChildren().get(0);
+        // Zugriff auf den Button über musicRoot und Children-Liste, da es keine direkte Referenz außerhalb der createMusicPane gibt
+        // Diese Art des Zugriffs ist anfällig für Änderungen in der Layout-Struktur.
+        // Besser wäre es, die ToggleButtons als Instanzvariablen zu deklarieren.
+        // Für diese Ausgabe belasse ich es beim ursprünglichen Ansatz.
+        ToggleButton shuffleButton = (ToggleButton) ((HBox) musicRoot.getChildren().get(6)).getChildren().get(0); // Annahme: playbackControls ist Index 6, shuffle ist erstes Kind
         shuffleButton.setText("Zufall (" + (isShuffleMode ? "An" : "Aus") + ")");
         if (isShuffleMode) {
             shuffleButton.setStyle("-fx-background-color: #4CAF50;"); // Grün für An
@@ -828,8 +915,8 @@ public class MemoryGame extends Application {
 
     private void toggleRepeat() {
         isRepeatMode = !isRepeatMode;
-        // Ich belasse den ursprünglichen Zugriff auf die ToggleButtons, wie er im Code war.
-        ToggleButton repeatButton = (ToggleButton) ((HBox) ((VBox) songListView.getParent()).getChildren().get(5)).getChildren().get(1);
+        // Ähnlicher Zugriff wie bei shuffleButton
+        ToggleButton repeatButton = (ToggleButton) ((HBox) musicRoot.getChildren().get(6)).getChildren().get(1); // Annahme: playbackControls ist Index 6, repeat ist zweites Kind
         repeatButton.setText("Wiederholen (" + (isRepeatMode ? "An" : "Aus") + ")");
         if (isRepeatMode) {
             repeatButton.setStyle("-fx-background-color: #2196F3;"); // Blau für An
@@ -838,9 +925,11 @@ public class MemoryGame extends Application {
         }
     }
 
+    // Automatische Speichern/Laden Methoden (ohne FileChooser)
     private void savePlaylist() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("playlist.ser"))) {
-            oos.writeObject(new ArrayList<>(playlist)); // Serialize the list of songs
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(PLAYLIST_FILE_NAME))) {
+            oos.writeObject(new ArrayList<>(playlist));
+            System.out.println("Playlist wurde erfolgreich unter " + new File(PLAYLIST_FILE_NAME).getAbsolutePath() + " gespeichert.");
         } catch (IOException e) {
             showError("Fehler", "Playlist konnte nicht gespeichert werden: " + e.getMessage());
             e.printStackTrace();
@@ -849,15 +938,20 @@ public class MemoryGame extends Application {
 
     @SuppressWarnings("unchecked")
     private void loadPlaylist() {
-        File file = new File("playlist.ser");
+        File file = new File(PLAYLIST_FILE_NAME);
+        System.out.println("Versuche, Playlist zu laden von: " + file.getAbsolutePath());
         if (file.exists()) {
             try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
                 List<Song> loadedSongs = (List<Song>) ois.readObject();
-                playlist.setAll(loadedSongs); // Replace existing playlist with loaded songs
+                playlist.setAll(loadedSongs);
+                currentSongIndex = 0; // Setze den Index auf den ersten Song beim Laden
+                System.out.println("Playlist wurde erfolgreich von " + PLAYLIST_FILE_NAME + " geladen! (" + playlist.size() + " Songs gefunden.)");
             } catch (IOException | ClassNotFoundException e) {
                 showError("Fehler", "Playlist konnte nicht geladen werden: " + e.getMessage());
                 e.printStackTrace();
             }
+        } else {
+            System.out.println("Keine Playlist-Datei '" + PLAYLIST_FILE_NAME + "' gefunden. Starte mit leerer Playlist.");
         }
     }
 

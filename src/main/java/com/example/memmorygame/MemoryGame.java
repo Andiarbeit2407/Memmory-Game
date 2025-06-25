@@ -79,10 +79,10 @@ public class MemoryGame extends Application {
         gameScene.getStylesheets().add(getClass().getResource("/dark-mode.css").toExternalForm());
 
         // --- Musik automatisch abspielen ---
-        if (!playlist.isEmpty()) {
-            playSong(playlist.get(0));
-            currentSongIndex = 0; // Sicherstellen, dass der Index des aktuell spielenden Songs gesetzt ist
-        }
+//        if (!playlist.isEmpty()) {
+//            playSong(playlist.get(0));
+//            currentSongIndex = 0; // Sicherstellen, dass der Index des aktuell spielenden Songs gesetzt ist
+//        }
 
         primaryStage.setScene(startScene);
         primaryStage.setTitle("Memory Game");
